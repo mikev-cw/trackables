@@ -2,7 +2,6 @@
 
 namespace Database\Factories;
 
-use App\Models\Trackable;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
