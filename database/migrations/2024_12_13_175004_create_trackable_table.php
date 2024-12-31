@@ -38,7 +38,7 @@ return new class extends Migration
             $table->boolean('required')->nullable(0)->default(0);
             $table->string('enum_uid', 24)->nullable();
             $table->json('calc_formula')->nullable();
-            $table->json('validation_rule');
+            $table->text('validation_rule');
             $table->timestamps();
 
             $table->foreign('trackable_uid')->references('uid')->on('trackables');
