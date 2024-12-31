@@ -8,5 +8,6 @@ use Illuminate\Database\Eloquent\Model;
 class TrackableData extends baseModel
 {
     use HasFactory;
-    //
+    protected $fillable = ['trackable_record_uid', 'trackable_schema_uid', 'value'];
+
 }
