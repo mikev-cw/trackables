@@ -87,6 +87,23 @@ class TrackableController extends Controller
 
     public function storeSingleSchema(Request $request) {
         // store a single schema for a trackable
-        dd($request->all());
+
+        $validated = $request->validate([
+            'name' => 'required|max:80',
+            'field_type' => 'required',
+            'enum_uid' => 'nullable',
+            'calc_formula' => 'nullable',
+            'validation_rule' => 'required',
+        ]);
+
+        return TrackableSchema::create([
+            'trackable_uid' => $request->trackable->uid,
+            'name' => $validated['name'],
+            'field_type' => $validated['field_type'],
+            'enum_uid' => $validated['enum_uid'] ?? null,
+            'calc_formula' => $validated['calc_formula'] ?? null,
+            'validation_rule' => $validated['validation_rule'],
+        ]);
+
     }
 }
