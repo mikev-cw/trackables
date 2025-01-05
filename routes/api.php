@@ -2,7 +2,9 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\TrackableController;
+use App\Http\Controllers\TrackableRecordController;
 use App\Models\Trackable;
+use App\Models\TrackableRecord;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -20,25 +22,21 @@ Route::middleware('auth:sanctum')->group(function () {
     })->name('profile.edit');
 
     // List Trackables
-    Route::get('trackable',function (Request $request) {
-        $t = Trackable::with('schema')
-            ->where('deleted',0)
-            ->where('user_id',$request->user()->id)
-            ->orderByDesc('created_at')
-            ->paginate(5);
-        return response()->json($t);
-    });
+    Route::get('trackable', [TrackableController::class, 'list']);
 
     // Create Trackable
-    Route::post('trackable', function(Request $request) {
-        return response()->json(['trackable creation']);
-    });
+    Route::post('trackable', [TrackableController::class, 'create']);
 
     // Get all records
+    Route::get('trackable/{trackable}/record', [TrackableRecordController::class, 'getRecords'])
+        ->can('own', 'trackable');
 
     // Create record
     Route::post('trackable/{trackable}/record', [TrackableController::class, 'storeRecord'])
-        ->can('create', 'trackable')
-    ;
+        ->can('own', 'trackable');
+
+    // Create Schema
+    Route::post('trackable/{trackable}/schema', [TrackableController::class, 'storeSingleSchema'])
+        ->can('own', 'trackable');
 
 });

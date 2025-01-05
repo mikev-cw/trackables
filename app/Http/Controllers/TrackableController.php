@@ -7,9 +7,38 @@ use App\Models\TrackableData;
 use App\Models\TrackableRecord;
 use App\Models\TrackableSchema;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class TrackableController extends Controller
 {
+
+    public function create(Request $request) {
+//        dd($request);
+//        dd(Auth::id());
+        $validated = $request->validate([
+            'name' => 'required|max:255',
+        ]);
+
+        $t = Trackable::create([
+            'user_id' => Auth::id(),
+            'name' => $validated['name'],
+        ]);
+
+        return $t;
+
+
+    }
+
+    public function list(Request $request)
+    {
+        // TODO: use a Resource? https://laravel.com/docs/11.x/eloquent-resources
+        return Trackable::with('schema')
+            ->where('deleted',0)
+            ->where('user_id',$request->user()->id)
+            ->orderByDesc('created_at')
+            ->paginate(10);
+    }
+
     public function storeRecord(Request $request)
     {
 
@@ -31,7 +60,6 @@ class TrackableController extends Controller
         $validated = $request->validate($validationRules);
 
 //        dd($validated);
-//
 //        exit;
 
         // Create the record
@@ -55,5 +83,10 @@ class TrackableController extends Controller
         ]);
 
 
+    }
+
+    public function storeSingleSchema(Request $request) {
+        // store a single schema for a trackable
+        dd($request->all());
     }
 }

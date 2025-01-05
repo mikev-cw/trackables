@@ -8,7 +8,7 @@ class Trackable extends baseModel
 {
     use HasFactory;
 
-    protected $fillable = ['uid', 'name', 'deleted'];
+    protected $fillable = ['uid', 'user_id', 'name', 'deleted'];
 
     public function user() {
         return $this->belongsTo(User::class);

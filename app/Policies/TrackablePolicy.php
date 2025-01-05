@@ -7,7 +7,7 @@ use App\Models\User;
 
 class TrackablePolicy
 {
-    public function create(User $user, Trackable $trackable): bool
+    public function own(User $user, Trackable $trackable): bool
     {
 //        dd($trackable->user_id);
 //        return true;

@@ -10,4 +10,8 @@ class TrackableData extends baseModel
     use HasFactory;
     protected $fillable = ['trackable_record_uid', 'trackable_schema_uid', 'value'];
 
+    public function schema() {
+        return $this->belongsTo(TrackableSchema::class, 'trackable_schema_uid');
+    }
+
 }

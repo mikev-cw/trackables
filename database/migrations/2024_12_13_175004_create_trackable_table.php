@@ -35,7 +35,7 @@ return new class extends Migration
             $table->string('trackable_uid', 24);
             $table->string('name', 80);
             $table->enum('field_type',['int', 'float', 'json', 'string', 'bool', 'date', 'datetime', 'img', 'url', 'enum', 'calc'])->nullable();
-            $table->boolean('required')->nullable(0)->default(0);
+//            $table->boolean('required')->nullable(0)->default(0);
             $table->string('enum_uid', 24)->nullable();
             $table->json('calc_formula')->nullable();
             $table->text('validation_rule');
