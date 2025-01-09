@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\TrackableResource;
 use App\Models\Trackable;
 use App\Models\TrackableData;
 use App\Models\TrackableRecord;
@@ -31,12 +32,11 @@ class TrackableController extends Controller
 
     public function list(Request $request)
     {
-        // TODO: use a Resource? https://laravel.com/docs/11.x/eloquent-resources
-        return Trackable::with('schema')
+        return TrackableResource::collection(Trackable::with('schema')
             ->where('deleted',0)
             ->where('user_id',$request->user()->id)
             ->orderByDesc('created_at')
-            ->paginate(10);
+            ->paginate(10));
     }
 
     public function storeRecord(Request $request)
@@ -49,26 +49,19 @@ class TrackableController extends Controller
             return [$key => $item->validation_rule];
         })->toArray();
 
-        // If no validation rules, handle appropriately
         if (empty($validationRules)) {
             return response()->json([
                 'message' => 'No validation rules were applied. Ensure your input matches the schema.',
             ], 400);
         }
 
-        // Proceed with validation
         $validated = $request->validate($validationRules);
 
-//        dd($validated);
-//        exit;
-
-        // Create the record
         $record = TrackableRecord::create([
             'trackable_uid' => $request->trackable->uid,
             'record_date' => now(),
         ]);
 
-//        dd($record->uid);
         foreach ($validated as $key => $value) {
             TrackableData::create([
                 'trackable_record_uid' => $record->uid,
