@@ -3,13 +3,11 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\TrackableController;
 use App\Http\Controllers\TrackableRecordController;
-use App\Models\Trackable;
-use App\Models\TrackableRecord;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/ping', function (Request $request) {
-    echo "PONG!".PHP_EOL;
+    return response(['response' => 'pong']);
 });
 
 Route::post('/register', [AuthController::class, 'register']);
