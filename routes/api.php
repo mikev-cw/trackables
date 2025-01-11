@@ -7,13 +7,12 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/ping', function (Request $request) {
-    return response(['response' => 'pong']);
+    return response()->json(['response' => 'pong']);
 });
 
 Route::post('/register', [AuthController::class, 'register']);
 
 Route::middleware('auth:sanctum')->group(function () {
-
     // Expose user data
     Route::get('/user', function (Request $request) {
         return $request->user();
@@ -35,6 +34,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Create Schema
     Route::post('trackable/{trackable}/schema', [TrackableController::class, 'storeSingleSchema'])
+        ->can('own', 'trackable');
+
+    // Edit Schema
+    Route::patch('trackable/{trackable}/schema/{schema}', [TrackableController::class, 'editSchema'])
         ->can('own', 'trackable');
 
 });

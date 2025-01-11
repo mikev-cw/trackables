@@ -9,13 +9,13 @@ use App\Models\TrackableRecord;
 use App\Models\TrackableSchema;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Validator;
 
 class TrackableController extends Controller
 {
 
-    public function create(Request $request) {
-//        dd($request);
-//        dd(Auth::id());
+    public function create(Request $request)
+    {
         $validated = $request->validate([
             'name' => 'required|max:255',
         ]);
@@ -26,8 +26,6 @@ class TrackableController extends Controller
         ]);
 
         return $t;
-
-
     }
 
     public function list(Request $request)
@@ -74,11 +72,10 @@ class TrackableController extends Controller
         return response()->json([
             'message' => 'Data successfully saved.',
         ]);
-
-
     }
 
-    public function storeSingleSchema(Request $request) {
+    public function storeSingleSchema(Request $request)
+    {
         // store a single schema for a trackable
 
         $validated = $request->validate([
@@ -98,5 +95,33 @@ class TrackableController extends Controller
             'validation_rule' => $validated['validation_rule'],
         ]);
 
+    }
+
+    public function editSchema(Request $request)
+    {
+
+        // Find the model by ID
+        $model = TrackableSchema::findOrFail($request->schema);
+
+        // Define validation rules
+        $rules = [
+            'name' => 'sometimes|string|max:80',
+            'field_type' => 'sometimes|string',
+            'enum_uid' => 'sometimes|string|max:24',
+            'calc_formula' => 'sometimes|',
+            'validation_rule' => 'sometimes|',
+        ];
+
+        // Validate the incoming request
+        $validator = Validator::make($request->all(), $rules);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        // Update only the provided fields
+        $model->update($request->only(array_keys($rules)));
+
+        return response()->json(['message' => 'Model updated successfully', 'data' => $model], 200);
     }
 }
