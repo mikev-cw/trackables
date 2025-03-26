@@ -28,8 +28,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('trackable/{trackable}/record', [TrackableRecordController::class, 'getRecords'])
         ->can('own', 'trackable');
 
-    // Create record
-    Route::post('trackable/{trackable}/record', [TrackableController::class, 'storeRecord'])
+    // Create record(s)
+    Route::post('trackable/{trackable}/record', [TrackableController::class, 'storeBulkRecords'])
+        ->can('own', 'trackable');
+
+    // Create bulk records
+    Route::post('trackable/{trackable}/record/bulk', [TrackableController::class, 'storeBulkRecords'])
         ->can('own', 'trackable');
 
     // Create Schema

@@ -9,6 +9,7 @@ use App\Models\TrackableRecord;
 use App\Models\TrackableSchema;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 class TrackableController extends Controller
@@ -37,7 +38,7 @@ class TrackableController extends Controller
             ->paginate(10));
     }
 
-    public function storeRecord(Request $request)
+    public function storeSingleRecord(Request $request)
     {
 
         $schema = $request->trackable->schema->keyBy('uid');
@@ -49,6 +50,7 @@ class TrackableController extends Controller
 
         if (empty($validationRules)) {
             return response()->json([
+                'success' => false,
                 'message' => 'No validation rules were applied. Ensure your input matches the schema.',
             ], 400);
         }
@@ -70,8 +72,69 @@ class TrackableController extends Controller
 
         // TODO Return a success response
         return response()->json([
+            'record_uid' => $record->uid,
+            'success' => true,
             'message' => 'Data successfully saved.',
         ]);
+    }
+
+    public function storeBulkRecords(Request $request)
+    {
+        $schema = $request->trackable->schema->keyBy('uid');
+
+        // Generate validation rules dynamically from the schema
+        $validationRules = $schema->mapWithKeys(function ($item, $key) {
+            return ["records.*.$key" => $item->validation_rule];
+        })->toArray();
+
+        if (empty($validationRules)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No validation rules were applied. Ensure your input matches the schema.',
+            ], 400);
+        }
+
+        // Validate all records
+        $validated = $request->validate([
+                'records' => 'required|array|min:1',
+            ] + $validationRules);
+
+        $items = $validated['records'];
+
+        $recordsCreated =[];
+
+        DB::transaction(function () use (&$request, &$items, &$recordsCreated) {
+            foreach ($items as $recordData) {
+                // Create a record
+                $record = TrackableRecord::create([
+                    'trackable_uid' => $request->trackable->uid,
+                    'record_date' => now(),
+                ]);
+
+                $recordsCreated[] = $record->uid;
+
+                // Prepare TrackableData instances
+                $trackableDataInstances = [];
+                foreach ($recordData as $key => $value) {
+                    $trackableDataInstances[] = new TrackableData([
+                        'trackable_record_uid' => $record->uid,
+                        'trackable_schema_uid' => $key,
+                        'value' => $value,
+                    ]);
+                }
+
+                // Bulk save using saveMany() to trigger Eloquent events
+                if (!empty($trackableDataInstances)) {
+                    $record->data()->saveMany($trackableDataInstances);
+                }
+            }
+        });
+
+        return response()->json([
+            'record_uids' => $recordsCreated,
+            'success' => true,
+            'message' => count($recordsCreated).' records created successfully',
+        ], 201);
     }
 
     public function storeSingleSchema(Request $request)
@@ -99,11 +162,11 @@ class TrackableController extends Controller
 
     public function editSchema(Request $request)
     {
-
         // Find the model by ID
         $model = TrackableSchema::findOrFail($request->schema);
 
         // Define validation rules
+        // https://laravel.com/docs/11.x/validation#available-validation-rules
         $rules = [
             'name' => 'sometimes|string|max:80',
             'field_type' => 'sometimes|string',
