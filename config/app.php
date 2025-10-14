@@ -14,6 +14,11 @@ return [
     */
 
     'name' => env('APP_NAME', 'Laravel'),
+    'version' => env('APP_VERSION', '0.1.0-alpha'),
+    'theme' => [
+        'mode' => env('APP_THEME', 'light'),
+        'primary' => env('APP_THEME_PRIMARY', 'blue'),
+    ],
 
     /*
     |--------------------------------------------------------------------------
