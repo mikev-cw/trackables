@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 
@@ -36,11 +37,31 @@ class AuthController extends Controller
         ]);
     }
 
-    public function login(Request $request) {
+    public function login(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required|string',
+        ]);
 
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user || !Hash::check($request->password, $user->password)) {
+            return response()->json(['error' => 'Invalid credentials.'], 401);
+        }
+
+        Auth::login($user);
+        $request->session()->regenerate();
+
+        return response()->json(['ok' => true, 'redirect' => url('/dashboard')]);
     }
 
-    public function logout() {
+    public function logout(Request $request)
+    {
+        Auth::logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
 
+        return redirect('/login');
     }
 }

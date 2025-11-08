@@ -1,18 +1,11 @@
 
 <!doctype html>
-<!--
-* Tabler - Premium and Open Source dashboard template with responsive and high quality UI.
-* @version 1.1.1
-* @link https://tabler.io
-* Copyright 2018-2025 The Tabler Authors
-* Copyright 2018-2025 codecalm.net Paweł Kuna
-* Licensed under MIT (https://github.com/tabler/tabler/blob/master/LICENSE)
--->
 <html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ config('app.name') }}</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.1.1/dist/css/tabler.min.css" />
 </head>
@@ -41,20 +34,18 @@
         <div class="card card-md">
             <div class="card-body">
                 <h2 class="h2 text-center mb-4">Login to your account</h2>
-                <form action="./" method="get" autocomplete="off" novalidate>
+                <div id="errorBox" class="error"></div>
+                <form  id="loginForm" autocomplete="off" novalidate>
                     <div class="mb-3">
                         <label class="form-label">Email address</label>
-                        <input type="email" class="form-control" placeholder="your@email.com" autocomplete="off" />
+                        <input id="email" type="email" class="form-control" placeholder="your@email.com" autocomplete="off" />
                     </div>
                     <div class="mb-2">
                         <label class="form-label">
                             Password
-                            <span class="form-label-description">
-                    <a href="./forgot-password.html">I forgot password</a>
-                  </span>
                         </label>
                         <div class="input-group input-group-flat">
-                            <input type="password" class="form-control" placeholder="Your password" autocomplete="off" />
+                            <input id="password" type="password" class="form-control" placeholder="Your password" autocomplete="off" />
                             <span class="input-group-text">
                     <a href="#" class="link-secondary" title="Show password" data-bs-toggle="tooltip">
                       <!-- Download SVG icon from http://tabler.io/icons/icon/eye -->
@@ -77,75 +68,51 @@
                   </span>
                         </div>
                     </div>
-                    <div class="mb-2">
-                        <label class="form-check">
-                            <input type="checkbox" class="form-check-input" />
-                            <span class="form-check-label">Remember me on this device</span>
-                        </label>
-                    </div>
                     <div class="form-footer">
                         <button type="submit" class="btn btn-primary w-100">Sign in</button>
                     </div>
                 </form>
             </div>
-            <div class="hr-text">or</div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col">
-                        <a href="#" class="btn btn-4 w-100">
-                            <!-- Download SVG icon from http://tabler.io/icons/icon/brand-github -->
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="24"
-                                height="24"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                class="icon text-github icon-2"
-                            >
-                                <path
-                                    d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5"
-                                />
-                            </svg>
-                            Login with Github
-                        </a>
-                    </div>
-                    <div class="col">
-                        <a href="#" class="btn btn-4 w-100">
-                            <!-- Download SVG icon from http://tabler.io/icons/icon/brand-x -->
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="24"
-                                height="24"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                class="icon text-x icon-2"
-                            >
-                                <path d="M4 4l11.733 16h4.267l-11.733 -16z" />
-                                <path d="M4 20l6.768 -6.768m2.46 -2.46l6.772 -6.772" />
-                            </svg>
-                            Login with X
-                        </a>
-                    </div>
-                </div>
-            </div>
         </div>
-        <div class="text-center text-secondary mt-3">Don't have account yet? <a href="./sign-up.html" tabindex="-1">Sign up</a></div>
     </div>
 </div>
-<!-- BEGIN GLOBAL MANDATORY SCRIPTS -->
-<script src="./dist/js/tabler.min.js?1740838744" defer></script>
-<!-- END GLOBAL MANDATORY SCRIPTS -->
-<!-- BEGIN DEMO SCRIPTS -->
-<script src="./preview/js/demo.min.js?1740838744" defer></script>
-<!-- END DEMO SCRIPTS -->
-<script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"rayId":"92c1f5bd6fd8ed20","serverTiming":{"name":{"cfExtPri":true,"cfL4":true,"cfSpeedBrain":true,"cfCacheStatus":true}},"version":"2025.3.0","token":"84cae67e72b342399609db8f32d1c3ff"}' crossorigin="anonymous"></script>
+<script>
+    const form = document.getElementById('loginForm');
+    const err = document.getElementById('errorBox');
+    function showError(msg){ err.textContent = msg; err.style.display = 'block'; }
+
+    form.addEventListener('submit', async e => {
+        e.preventDefault();
+        err.style.display = 'none';
+
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+
+        try {
+            const res = await fetch('{{ route('login.post') }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                },
+                body: JSON.stringify({
+                    email,
+                    password: password
+                })
+            });
+
+            const data = await res.json();
+
+            if (!res.ok || !data.ok) {
+                showError(data.error || 'Login failed.');
+                return;
+            }
+
+            window.location.href = data.redirect;
+        } catch (err) {
+            showError('Network error.');
+        }
+    });
+</script>
 </body>
 </html>

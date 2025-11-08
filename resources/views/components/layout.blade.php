@@ -42,5 +42,11 @@
 </div>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/js/tabler.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vue@3.5.22/dist/vue.global.js"></script> <!-- TODO min version when not production -->
+<script src="/js/app.js"></script>
+
+@if(!empty($script))
+    <script src="{{ asset($script) }}"></script>
+@endif
 </body>
 </html>
