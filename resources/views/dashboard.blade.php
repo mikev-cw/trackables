@@ -52,4 +52,20 @@
 
     <h1>HEY TRACKER!</h1>
 
+    <h1>Your Trackables</h1>
+
+    @isset($list)
+    <ul>
+        @foreach ($list as $trackable)
+            <li>
+                <a href="{{ route('trackables.show', $trackable) }}">{{ $trackable->name }}</a>"> {{ $trackable->name }}</a>
+                <small>{{ $trackable->created_at }}</small>
+            </li>
+        @endforeach
+    </ul>
+
+    {{-- Pagination links --}}
+    {{ $list->links() }}
+    @endisset
+
 </x-layout>

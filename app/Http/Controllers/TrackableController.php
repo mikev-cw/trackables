@@ -187,4 +187,31 @@ class TrackableController extends Controller
 
         return response()->json(['message' => 'Model updated successfully', 'data' => $model], 200);
     }
+
+    public function show($id, Request $request)
+    {
+        $perPage = (int) $request->query('per_page', 25);
+
+        $trackable = Trackable::with(['schema', 'records' => function ($q) {
+            $q->orderBy('created_at', 'desc');
+        }])->findOrFail($id);
+
+        // Estrai e decodifica lo schema se è JSON
+        $schema = $trackable->schema;
+        if (is_string($schema)) {
+            $decoded = json_decode($schema, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $schema = $decoded;
+            }
+        }
+
+        // Recupera i record collegati, ordinati per più recenti, paginati
+        $records = $trackable->records()
+            ->with('data')
+            ->orderBy('created_at', 'desc')
+            ->paginate($perPage)
+            ->withQueryString();
+
+        return view('trackables.show', compact('trackable', 'schema', 'records'));
+    }
 }

@@ -8,6 +8,14 @@ class DashboardController extends Controller
 {
     public function index()
     {
-        return view('dashboard');
+        $listCollection = $this->getTrackables();
+        $list = $listCollection->resource;
+        return view('dashboard', compact('list'));
+    }
+
+    public function getTrackables() {
+        // Implementation for fetching trackables
+        $t = new TrackableController();
+        return $t->list(request());
     }
 }
