@@ -58,8 +58,8 @@
     <ul>
         @foreach ($list as $trackable)
             <li>
-                <a href="{{ route('trackables.show', $trackable) }}">{{ $trackable->name }}</a>"> {{ $trackable->name }}</a>
-                <small>{{ $trackable->created_at }}</small>
+                <a href="{{ route('trackables.show', $trackable) }}">{{ $trackable->name }}</a>
+                <small>created at {{ $trackable->created_at }}</small>
             </li>
         @endforeach
     </ul>

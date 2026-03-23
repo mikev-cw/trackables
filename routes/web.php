@@ -16,5 +16,19 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('/trackables/', [DashboardController::class, 'index'])->name('trackables_index');
-    Route::get('/trackables/{id}', [TrackableController::class, 'show'])->name('trackables.show');
+    Route::get('/trackables/{trackable}/records/create', [TrackableController::class, 'createRecord'])
+        ->can('own', 'trackable')
+        ->name('trackables.records.create');
+    Route::post('/trackables/{trackable}/records', [TrackableController::class, 'storeRecord'])
+        ->can('own', 'trackable')
+        ->name('trackables.records.store');
+    Route::get('/trackables/{trackable}/records/{record}/edit', [TrackableController::class, 'editRecord'])
+        ->can('own', 'trackable')
+        ->name('trackables.records.edit');
+    Route::put('/trackables/{trackable}/records/{record}', [TrackableController::class, 'updateRecord'])
+        ->can('own', 'trackable')
+        ->name('trackables.records.update');
+    Route::get('/trackables/{trackable}', [TrackableController::class, 'show'])
+        ->can('own', 'trackable')
+        ->name('trackables.show');
 });
