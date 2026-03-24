@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Trackable;
 use App\Models\TrackableData;
+use App\Models\TrackableGraph;
 use App\Models\TrackableRecord;
 use App\Models\TrackableSchema;
 use App\Models\User;
@@ -195,6 +196,44 @@ class TrackableRecordPageTest extends TestCase
         ]);
     }
 
+    public function test_deleting_record_removes_record_and_related_values(): void
+    {
+        $user = User::factory()->create();
+        $trackable = Trackable::create([
+            'user_id' => $user->id,
+            'name' => 'Vitals',
+        ]);
+
+        $weight = TrackableSchema::create([
+            'trackable_uid' => $trackable->uid,
+            'name' => 'Weight',
+            'field_type' => 'float',
+            'validation_rule' => 'required|numeric',
+        ]);
+
+        $record = TrackableRecord::create([
+            'trackable_uid' => $trackable->uid,
+            'record_date' => Carbon::parse('2026-03-01 08:00:00'),
+        ]);
+
+        TrackableData::create([
+            'trackable_record_uid' => $record->uid,
+            'trackable_schema_uid' => $weight->uid,
+            'value' => '72.4',
+        ]);
+
+        $response = $this->actingAs($user)->delete(route('trackables.records.destroy', [$trackable->uid, $record->uid]));
+
+        $response->assertRedirect(route('trackables.show', $trackable->uid));
+        $response->assertSessionHas('status', 'Record deleted successfully.');
+        $this->assertDatabaseMissing('trackable_records', [
+            'uid' => $record->uid,
+        ]);
+        $this->assertDatabaseMissing('trackable_data', [
+            'trackable_record_uid' => $record->uid,
+        ]);
+    }
+
     public function test_show_page_applies_filters_sort_and_pagination(): void
     {
         $user = User::factory()->create();
@@ -359,5 +398,280 @@ class TrackableRecordPageTest extends TestCase
         $this->assertSame(25, $records->perPage());
         $this->assertCount(25, $records->items());
         $this->assertSame(30, $records->total());
+    }
+
+    public function test_statistics_page_is_accessible_and_builds_graph_data(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-03-24 12:00:00'));
+
+        $user = User::factory()->create();
+        $trackable = Trackable::create([
+            'user_id' => $user->id,
+            'name' => 'Sensor data',
+        ]);
+
+        $temperature = TrackableSchema::create([
+            'trackable_uid' => $trackable->uid,
+            'name' => 'Temperature',
+            'field_type' => 'float',
+            'validation_rule' => 'required|numeric',
+        ]);
+        $humidity = TrackableSchema::create([
+            'trackable_uid' => $trackable->uid,
+            'name' => 'Humidity',
+            'field_type' => 'float',
+            'validation_rule' => 'required|numeric',
+        ]);
+
+        $oldRecord = TrackableRecord::create([
+            'trackable_uid' => $trackable->uid,
+            'record_date' => Carbon::parse('2025-08-01 08:00:00'),
+        ]);
+        $dayOneMorning = TrackableRecord::create([
+            'trackable_uid' => $trackable->uid,
+            'record_date' => Carbon::parse('2026-03-20 08:00:00'),
+        ]);
+        $dayOneEvening = TrackableRecord::create([
+            'trackable_uid' => $trackable->uid,
+            'record_date' => Carbon::parse('2026-03-20 20:00:00'),
+        ]);
+
+        TrackableData::create([
+            'trackable_record_uid' => $oldRecord->uid,
+            'trackable_schema_uid' => $temperature->uid,
+            'value' => '10.5',
+        ]);
+        TrackableData::create([
+            'trackable_record_uid' => $dayOneMorning->uid,
+            'trackable_schema_uid' => $temperature->uid,
+            'value' => '19.5',
+        ]);
+        TrackableData::create([
+            'trackable_record_uid' => $dayOneMorning->uid,
+            'trackable_schema_uid' => $humidity->uid,
+            'value' => '60.1',
+        ]);
+        TrackableData::create([
+            'trackable_record_uid' => $dayOneEvening->uid,
+            'trackable_schema_uid' => $temperature->uid,
+            'value' => '21.0',
+        ]);
+        TrackableData::create([
+            'trackable_record_uid' => $dayOneEvening->uid,
+            'trackable_schema_uid' => $humidity->uid,
+            'value' => '58.4',
+        ]);
+
+        TrackableGraph::create([
+            'trackable_uid' => $trackable->uid,
+            'title' => 'Daily temperature',
+            'graph_type' => 'line',
+            'range_type' => 'last_6_months',
+            'bucket_size' => 'day',
+            'aggregate' => 'latest',
+            'sampling' => 'daily_latest',
+            'schema_uids' => [$temperature->uid],
+            'filters' => [],
+        ]);
+
+        $response = $this->actingAs($user)->get(route('trackables.statistics', $trackable->uid));
+
+        $response->assertOk();
+        $response->assertSee('Daily temperature');
+
+        $graphs = $response->viewData('graphs');
+
+        $this->assertCount(1, $graphs);
+        $this->assertSame(['2026-03-20'], $graphs[0]['chart']['labels']->all());
+        $this->assertSame([21.0], $graphs[0]['chart']['datasets'][0]['data']->all());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_posting_graph_definition_creates_saved_graph(): void
+    {
+        $user = User::factory()->create();
+        $trackable = Trackable::create([
+            'user_id' => $user->id,
+            'name' => 'Sensor data',
+        ]);
+        $temperature = TrackableSchema::create([
+            'trackable_uid' => $trackable->uid,
+            'name' => 'Temperature',
+            'field_type' => 'float',
+            'validation_rule' => 'required|numeric',
+        ]);
+        $humidity = TrackableSchema::create([
+            'trackable_uid' => $trackable->uid,
+            'name' => 'Humidity',
+            'field_type' => 'float',
+            'validation_rule' => 'required|numeric',
+        ]);
+
+        $response = $this->actingAs($user)->post(route('trackables.statistics.graphs.store', $trackable->uid), [
+            'title' => 'Environment overview',
+            'graph_type' => 'line',
+            'range_type' => 'all_time',
+            'bucket_size' => 'raw',
+            'aggregate' => 'latest',
+            'schema_uids' => [$temperature->uid, $humidity->uid],
+            'filters' => [],
+        ]);
+
+        $response->assertRedirect(route('trackables.statistics', $trackable->uid));
+        $response->assertSessionHas('status', 'Graph added successfully.');
+        $this->assertDatabaseHas('trackable_graphs', [
+            'trackable_uid' => $trackable->uid,
+            'title' => 'Environment overview',
+            'graph_type' => 'line',
+            'range_type' => 'all_time',
+            'bucket_size' => 'raw',
+            'aggregate' => 'latest',
+        ]);
+    }
+
+    public function test_statistics_page_applies_graph_filters_and_aggregation(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-03-24 12:00:00'));
+
+        $user = User::factory()->create();
+        $trackable = Trackable::create([
+            'user_id' => $user->id,
+            'name' => 'Fuel prices',
+        ]);
+
+        $price = TrackableSchema::create([
+            'trackable_uid' => $trackable->uid,
+            'name' => 'Price',
+            'field_type' => 'float',
+            'validation_rule' => 'required|numeric',
+        ]);
+        $pumpId = TrackableSchema::create([
+            'trackable_uid' => $trackable->uid,
+            'name' => 'Pump ID',
+            'field_type' => 'int',
+            'validation_rule' => 'required|integer',
+        ]);
+        $fuelType = TrackableSchema::create([
+            'trackable_uid' => $trackable->uid,
+            'name' => 'Fuel Type',
+            'field_type' => 'string',
+            'validation_rule' => 'required|string',
+        ]);
+
+        $firstRecord = TrackableRecord::create([
+            'trackable_uid' => $trackable->uid,
+            'record_date' => Carbon::parse('2026-03-20 08:00:00'),
+        ]);
+        $secondRecord = TrackableRecord::create([
+            'trackable_uid' => $trackable->uid,
+            'record_date' => Carbon::parse('2026-03-20 18:00:00'),
+        ]);
+        $ignoredRecord = TrackableRecord::create([
+            'trackable_uid' => $trackable->uid,
+            'record_date' => Carbon::parse('2026-03-20 12:00:00'),
+        ]);
+
+        foreach ([
+            [$firstRecord, $price, '1.70'],
+            [$firstRecord, $pumpId, '2349'],
+            [$firstRecord, $fuelType, 'diesel'],
+            [$secondRecord, $price, '1.80'],
+            [$secondRecord, $pumpId, '2349'],
+            [$secondRecord, $fuelType, 'diesel'],
+            [$ignoredRecord, $price, '1.50'],
+            [$ignoredRecord, $pumpId, '1111'],
+            [$ignoredRecord, $fuelType, 'petrol'],
+        ] as [$record, $schema, $value]) {
+            TrackableData::create([
+                'trackable_record_uid' => $record->uid,
+                'trackable_schema_uid' => $schema->uid,
+                'value' => $value,
+            ]);
+        }
+
+        TrackableGraph::create([
+            'trackable_uid' => $trackable->uid,
+            'title' => 'Diesel at pump 2349',
+            'graph_type' => 'line',
+            'range_type' => 'all_time',
+            'bucket_size' => 'day',
+            'aggregate' => 'average',
+            'sampling' => 'all',
+            'schema_uids' => [$price->uid],
+            'filters' => [
+                $pumpId->uid => '2349',
+                $fuelType->uid => 'diesel',
+            ],
+        ]);
+
+        $response = $this->actingAs($user)->get(route('trackables.statistics', $trackable->uid));
+
+        $response->assertOk();
+        $response->assertSee('Diesel at pump 2349');
+        $response->assertSee('Pump ID: 2349');
+
+        $graphs = $response->viewData('graphs');
+
+        $this->assertSame(['2026-03-20'], $graphs[0]['chart']['labels']->all());
+        $this->assertSame([1.75], $graphs[0]['chart']['datasets'][0]['data']->all());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_updating_graph_definition_changes_saved_configuration(): void
+    {
+        $user = User::factory()->create();
+        $trackable = Trackable::create([
+            'user_id' => $user->id,
+            'name' => 'Sensor data',
+        ]);
+        $temperature = TrackableSchema::create([
+            'trackable_uid' => $trackable->uid,
+            'name' => 'Temperature',
+            'field_type' => 'float',
+            'validation_rule' => 'required|numeric',
+        ]);
+        $note = TrackableSchema::create([
+            'trackable_uid' => $trackable->uid,
+            'name' => 'Location',
+            'field_type' => 'string',
+            'validation_rule' => 'required|string',
+        ]);
+
+        $graph = TrackableGraph::create([
+            'trackable_uid' => $trackable->uid,
+            'title' => 'Original',
+            'graph_type' => 'line',
+            'range_type' => 'all_time',
+            'bucket_size' => 'raw',
+            'aggregate' => 'latest',
+            'sampling' => 'all',
+            'schema_uids' => [$temperature->uid],
+            'filters' => [],
+        ]);
+
+        $response = $this->actingAs($user)->put(route('trackables.statistics.graphs.update', [$trackable->uid, $graph->uid]), [
+            'title' => 'Updated',
+            'graph_type' => 'bar',
+            'range_type' => 'last_30_days',
+            'bucket_size' => 'week',
+            'aggregate' => 'max',
+            'schema_uids' => [$temperature->uid],
+            'filters' => [
+                $note->uid => 'warehouse',
+            ],
+        ]);
+
+        $response->assertRedirect(route('trackables.statistics', $trackable->uid));
+        $response->assertSessionHas('status', 'Graph updated successfully.');
+        $this->assertDatabaseHas('trackable_graphs', [
+            'uid' => $graph->uid,
+            'title' => 'Updated',
+            'graph_type' => 'bar',
+            'range_type' => 'last_30_days',
+            'bucket_size' => 'week',
+            'aggregate' => 'max',
+        ]);
     }
 }

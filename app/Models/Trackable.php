@@ -22,4 +22,8 @@ class Trackable extends baseModel
         return $this->hasMany(TrackableRecord::class);
     }
 
+    public function graphs() {
+        return $this->hasMany(TrackableGraph::class);
+    }
+
 }

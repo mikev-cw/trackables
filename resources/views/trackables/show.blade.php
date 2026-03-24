@@ -5,6 +5,9 @@
         <a href="{{ route('trackables.records.create', $trackable->uid) }}" class="btn btn-primary">
             Add record
         </a>
+        <a href="{{ route('trackables.statistics', $trackable->uid) }}" class="btn btn-outline-primary">
+            Statistics
+        </a>
     </x-slot>
 
     @if (session('status'))
@@ -160,9 +163,16 @@
                                     <div class="fw-semibold">
                                         Record Date: {{ $record->record_date }}
                                     </div>
-                                    <a href="{{ route('trackables.records.edit', [$trackable->uid, $record->uid]) }}" class="btn btn-sm btn-outline-primary mt-2">
-                                        Edit record
-                                    </a>
+                                    <div class="d-flex gap-2 mt-2">
+                                        <a href="{{ route('trackables.records.edit', [$trackable->uid, $record->uid]) }}" class="btn btn-sm btn-outline-primary">
+                                            Edit record
+                                        </a>
+                                        <form method="POST" action="{{ route('trackables.records.destroy', [$trackable->uid, $record->uid]) }}" onsubmit="return confirm('Delete this record? This action cannot be undone.');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                        </form>
+                                    </div>
                                 </div>
                                 <div class="text-secondary small">
                                     Created: {{ $record->created_at }}

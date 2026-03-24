@@ -28,6 +28,24 @@ Route::middleware('auth')->group(function () {
     Route::put('/trackables/{trackable}/records/{record}', [TrackableController::class, 'updateRecord'])
         ->can('own', 'trackable')
         ->name('trackables.records.update');
+    Route::delete('/trackables/{trackable}/records/{record}', [TrackableController::class, 'destroyRecord'])
+        ->can('own', 'trackable')
+        ->name('trackables.records.destroy');
+    Route::get('/trackables/{trackable}/statistics', [TrackableController::class, 'statistics'])
+        ->can('own', 'trackable')
+        ->name('trackables.statistics');
+    Route::post('/trackables/{trackable}/statistics/graphs', [TrackableController::class, 'storeGraph'])
+        ->can('own', 'trackable')
+        ->name('trackables.statistics.graphs.store');
+    Route::get('/trackables/{trackable}/statistics/graphs/{graph}/edit', [TrackableController::class, 'editGraph'])
+        ->can('own', 'trackable')
+        ->name('trackables.statistics.graphs.edit');
+    Route::put('/trackables/{trackable}/statistics/graphs/{graph}', [TrackableController::class, 'updateGraph'])
+        ->can('own', 'trackable')
+        ->name('trackables.statistics.graphs.update');
+    Route::delete('/trackables/{trackable}/statistics/graphs/{graph}', [TrackableController::class, 'destroyGraph'])
+        ->can('own', 'trackable')
+        ->name('trackables.statistics.graphs.destroy');
     Route::get('/trackables/{trackable}', [TrackableController::class, 'show'])
         ->can('own', 'trackable')
         ->name('trackables.show');

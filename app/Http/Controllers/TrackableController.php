@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Http\Resources\TrackableResource;
 use App\Models\Trackable;
 use App\Models\TrackableData;
+use App\Models\TrackableGraph;
 use App\Models\TrackableRecord;
 use App\Models\TrackableSchema;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -52,7 +54,7 @@ class TrackableController extends Controller
         ]);
     }
 
-    public function storeBulkRecords(Request $request)
+    public function storeBulkRecords(Request $request): \Illuminate\Http\JsonResponse
     {
         $schema = $request->trackable->schema->keyBy('uid');
 
@@ -270,6 +272,33 @@ class TrackableController extends Controller
         ));
     }
 
+    public function statistics(Trackable $trackable)
+    {
+        $trackable->load([
+            'schema' => fn ($query) => $query->orderBy('created_at'),
+            'graphs' => fn ($query) => $query->latest(),
+        ]);
+
+        $schema = $trackable->schema;
+        $graphableSchema = $trackable->schema->filter(fn ($field) => $this->isGraphableFieldType($field->field_type))->values();
+        $schemaByUid = $trackable->schema->keyBy('uid');
+        $graphs = $trackable->graphs->map(fn ($graph) => $this->buildGraphViewModel($trackable, $graph, $schemaByUid));
+        [$graphTypeOptions, $rangeOptions, $bucketOptions, $aggregateOptions] = $this->getGraphOptionSets();
+        $graphForm = $this->getGraphFormState($trackable->schema, $graphableSchema);
+
+        return view('trackables.statistics', compact(
+            'trackable',
+            'schema',
+            'graphs',
+            'graphableSchema',
+            'graphForm',
+            'graphTypeOptions',
+            'rangeOptions',
+            'bucketOptions',
+            'aggregateOptions'
+        ));
+    }
+
     public function createRecord(Trackable $trackable)
     {
         $schema = $trackable->schema()->orderBy('created_at')->get();
@@ -307,6 +336,75 @@ class TrackableController extends Controller
             ->with('status', 'Record updated successfully.');
     }
 
+    public function destroyRecord(Trackable $trackable, TrackableRecord $record)
+    {
+        $record = $this->getTrackableRecordOrFail($trackable, $record);
+        $this->deleteSingleRecord($record);
+
+        return redirect()
+            ->route('trackables.show', $trackable->uid)
+            ->with('status', 'Record deleted successfully.');
+    }
+
+    public function storeGraph(Request $request, Trackable $trackable)
+    {
+        $trackable->load('schema');
+        $validated = $this->validateGraphRequest($request, $trackable);
+
+        TrackableGraph::create($this->buildGraphPayload($trackable, $validated));
+
+        return redirect()
+            ->route('trackables.statistics', $trackable->uid)
+            ->with('status', 'Graph added successfully.');
+    }
+
+    public function editGraph(Trackable $trackable, TrackableGraph $graph)
+    {
+        $trackable->load(['schema' => fn ($query) => $query->orderBy('created_at')]);
+        abort_unless($graph->trackable_uid === $trackable->uid, 404);
+
+        $schema = $trackable->schema;
+        $graphableSchema = $trackable->schema->filter(fn ($field) => $this->isGraphableFieldType($field->field_type))->values();
+        [$graphTypeOptions, $rangeOptions, $bucketOptions, $aggregateOptions] = $this->getGraphOptionSets();
+        $graphForm = $this->getGraphFormState($trackable->schema, $graphableSchema, $graph);
+
+        return view('trackables.edit-graph', compact(
+            'trackable',
+            'schema',
+            'graph',
+            'graphForm',
+            'graphableSchema',
+            'graphTypeOptions',
+            'rangeOptions',
+            'bucketOptions',
+            'aggregateOptions'
+        ));
+    }
+
+    public function updateGraph(Request $request, Trackable $trackable, TrackableGraph $graph)
+    {
+        $trackable->load('schema');
+        abort_unless($graph->trackable_uid === $trackable->uid, 404);
+
+        $validated = $this->validateGraphRequest($request, $trackable);
+        $graph->update($this->buildGraphPayload($trackable, $validated));
+
+        return redirect()
+            ->route('trackables.statistics', $trackable->uid)
+            ->with('status', 'Graph updated successfully.');
+    }
+
+    public function destroyGraph(Trackable $trackable, TrackableGraph $graph)
+    {
+        abort_unless($graph->trackable_uid === $trackable->uid, 404);
+
+        $graph->delete();
+
+        return redirect()
+            ->route('trackables.statistics', $trackable->uid)
+            ->with('status', 'Graph deleted successfully.');
+    }
+
     private function validateSingleRecord(Request $request, Trackable $trackable): array
     {
         $schema = $trackable->schema->keyBy('uid');
@@ -329,6 +427,98 @@ class TrackableController extends Controller
     private function usesExactSchemaFilter(?string $fieldType): bool
     {
         return in_array($fieldType, ['int', 'float', 'bool', 'date', 'datetime'], true);
+    }
+
+    private function isGraphableFieldType(?string $fieldType): bool
+    {
+        return in_array($fieldType, ['int', 'float', 'bool'], true);
+    }
+
+    private function getGraphOptionSets(): array
+    {
+        return [
+            ['line' => 'Line', 'bar' => 'Bar'],
+            [
+                'all_time' => 'All time',
+                'last_30_days' => 'Last 30 days',
+                'last_6_months' => 'Last 6 months',
+                'last_12_months' => 'Last 12 months',
+            ],
+            [
+                'raw' => 'No grouping',
+                'day' => 'By day',
+                'week' => 'By week',
+                'month' => 'By month',
+            ],
+            [
+                'latest' => 'Latest',
+                'average' => 'Average',
+                'min' => 'Minimum',
+                'max' => 'Maximum',
+                'sum' => 'Sum',
+            ],
+        ];
+    }
+
+    private function getGraphFormState(Collection $schema, Collection $graphableSchema, ?TrackableGraph $graph = null): array
+    {
+        $storedFilters = collect($graph?->filters ?? []);
+
+        return [
+            'title' => old('title', $graph?->title ?? ''),
+            'graph_type' => old('graph_type', $graph?->graph_type ?? 'line'),
+            'range_type' => old('range_type', $graph?->range_type ?? 'all_time'),
+            'bucket_size' => old('bucket_size', $graph?->bucket_size ?? ($graph?->sampling === 'daily_latest' ? 'day' : 'raw')),
+            'aggregate' => old('aggregate', $graph?->aggregate ?? ($graph?->sampling === 'daily_latest' ? 'latest' : 'latest')),
+            'schema_uids' => old('schema_uids', $graph?->schema_uids ?? []),
+            'filters' => $schema->mapWithKeys(function ($field) use ($storedFilters) {
+                return [$field->uid => old("filters.{$field->uid}", (string) $storedFilters->get($field->uid, ''))];
+            })->toArray(),
+            'graphable_schema_uids' => $graphableSchema->pluck('uid')->all(),
+        ];
+    }
+
+    private function validateGraphRequest(Request $request, Trackable $trackable): array
+    {
+        [$graphTypeOptions, $rangeOptions, $bucketOptions, $aggregateOptions] = $this->getGraphOptionSets();
+        $graphableSchemaUids = $trackable->schema
+            ->filter(fn ($field) => $this->isGraphableFieldType($field->field_type))
+            ->pluck('uid')
+            ->all();
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'graph_type' => 'required|in:'.implode(',', array_keys($graphTypeOptions)),
+            'range_type' => 'required|in:'.implode(',', array_keys($rangeOptions)),
+            'bucket_size' => 'required|in:'.implode(',', array_keys($bucketOptions)),
+            'aggregate' => 'required|in:'.implode(',', array_keys($aggregateOptions)),
+            'schema_uids' => 'required|array|min:1',
+            'schema_uids.*' => 'required|string|in:'.implode(',', $graphableSchemaUids),
+            'filters' => 'nullable|array',
+        ]);
+
+        $validated['filters'] = collect($validated['filters'] ?? [])
+            ->filter(fn ($value) => !is_null($value) && trim((string) $value) !== '')
+            ->map(fn ($value) => trim((string) $value))
+            ->only($trackable->schema->pluck('uid')->all())
+            ->toArray();
+
+        return $validated;
+    }
+
+    private function buildGraphPayload(Trackable $trackable, array $validated): array
+    {
+        return [
+            'trackable_uid' => $trackable->uid,
+            'title' => $validated['title'],
+            'graph_type' => $validated['graph_type'],
+            'range_type' => $validated['range_type'],
+            'bucket_size' => $validated['bucket_size'],
+            'aggregate' => $validated['aggregate'],
+            'sampling' => $validated['bucket_size'] === 'day' && $validated['aggregate'] === 'latest' ? 'daily_latest' : 'all',
+            'schema_uids' => array_values(array_unique($validated['schema_uids'])),
+            'filters' => $validated['filters'],
+        ];
     }
 
     private function getTrackableRecordOrFail(Trackable $trackable, TrackableRecord $record): TrackableRecord
@@ -395,5 +585,210 @@ class TrackableController extends Controller
                 ]);
             }
         });
+    }
+
+    private function deleteSingleRecord(TrackableRecord $record): void
+    {
+        DB::transaction(function () use ($record) {
+            $record->data()->delete();
+            $record->delete();
+        });
+    }
+
+    private function buildGraphViewModel(Trackable $trackable, TrackableGraph $graph, Collection $schemaByUid): array
+    {
+        $bucketSize = $graph->bucket_size ?? ($graph->sampling === 'daily_latest' ? 'day' : 'raw');
+        $aggregate = $graph->aggregate ?? 'latest';
+
+        $records = $trackable->records()
+            ->with(['data' => function ($query) use ($graph) {
+                $query->whereIn('trackable_schema_uid', $graph->schema_uids ?? []);
+            }])
+            ->when($this->getGraphRangeStart($graph->range_type), function ($query, $startDate) {
+                $query->where('record_date', '>=', $startDate);
+            })
+            ->when(!empty($graph->filters), function ($query) use ($schemaByUid, $graph) {
+                foreach ($graph->filters as $schemaUid => $value) {
+                    $field = $schemaByUid->get($schemaUid);
+                    $operator = $this->usesExactSchemaFilter($field?->field_type) ? '=' : 'like';
+                    $comparisonValue = $operator === '=' ? $value : '%'.$value.'%';
+
+                    $query->whereHas('data', function ($dataQuery) use ($schemaUid, $operator, $comparisonValue) {
+                        $dataQuery
+                            ->where('trackable_schema_uid', $schemaUid)
+                            ->where('value', $operator, $comparisonValue);
+                    });
+                }
+            })
+            ->orderBy('record_date')
+            ->get();
+
+        [$labels, $datasets] = $bucketSize === 'raw'
+            ? $this->buildRawGraphSeries($records, $graph, $schemaByUid)
+            : $this->buildBucketedGraphSeries($records, $graph, $schemaByUid, $bucketSize, $aggregate);
+
+        $activeFilterCount = count($graph->filters ?? []);
+        $filterSummary = collect($graph->filters ?? [])
+            ->map(function ($value, $schemaUid) use ($schemaByUid) {
+                return ($schemaByUid->get($schemaUid)?->name ?? $schemaUid).': '.$value;
+            })
+            ->values()
+            ->all();
+
+        return [
+            'uid' => $graph->uid,
+            'title' => $graph->title,
+            'graph_type' => $graph->graph_type,
+            'range_label' => $this->getRangeLabel($graph->range_type),
+            'bucket_label' => $this->getBucketLabel($bucketSize),
+            'aggregate_label' => $this->getAggregateLabel($aggregate),
+            'series_label' => collect($graph->schema_uids)
+                ->map(fn ($schemaUid) => $schemaByUid->get($schemaUid)?->name)
+                ->filter()
+                ->join(', '),
+            'active_filter_count' => $activeFilterCount,
+            'filter_summary' => $filterSummary,
+            'chart' => [
+                'labels' => $labels,
+                'datasets' => $datasets,
+            ],
+        ];
+    }
+
+    private function buildRawGraphSeries(Collection $records, TrackableGraph $graph, Collection $schemaByUid): array
+    {
+        $labels = $records->map(fn ($record) => Carbon::parse($record->record_date)->format('Y-m-d H:i'))->values();
+        $datasets = [];
+
+        foreach ($graph->schema_uids as $schemaUid) {
+            $field = $schemaByUid->get($schemaUid);
+
+            if (!$field || !$this->isGraphableFieldType($field->field_type)) {
+                continue;
+            }
+
+            $datasets[] = [
+                'label' => $field->name,
+                'data' => $records->map(function ($record) use ($schemaUid, $field) {
+                    $dataRow = $record->data->firstWhere('trackable_schema_uid', $schemaUid);
+
+                    if (!$dataRow) {
+                        return null;
+                    }
+
+                    return $field->field_type === 'bool' ? (int) $dataRow->value : (float) $dataRow->value;
+                })->values(),
+            ];
+        }
+
+        return [$labels, $datasets];
+    }
+
+    private function buildBucketedGraphSeries(Collection $records, TrackableGraph $graph, Collection $schemaByUid, string $bucketSize, string $aggregate): array
+    {
+        $bucketedRecords = $records
+            ->groupBy(fn ($record) => $this->getBucketKey(Carbon::parse($record->record_date), $bucketSize));
+
+        $labels = $bucketedRecords->keys()->values();
+        $datasets = [];
+
+        foreach ($graph->schema_uids as $schemaUid) {
+            $field = $schemaByUid->get($schemaUid);
+
+            if (!$field || !$this->isGraphableFieldType($field->field_type)) {
+                continue;
+            }
+
+            $datasets[] = [
+                'label' => $field->name,
+                'data' => $bucketedRecords->map(function ($bucketRecords) use ($schemaUid, $field, $aggregate) {
+                    $points = $bucketRecords
+                        ->map(function ($record) use ($schemaUid, $field) {
+                            $dataRow = $record->data->firstWhere('trackable_schema_uid', $schemaUid);
+
+                            if (!$dataRow) {
+                                return null;
+                            }
+
+                            return [
+                                'record_date' => Carbon::parse($record->record_date),
+                                'value' => $field->field_type === 'bool' ? (int) $dataRow->value : (float) $dataRow->value,
+                            ];
+                        })
+                        ->filter()
+                        ->values();
+
+                    if ($points->isEmpty()) {
+                        return null;
+                    }
+
+                    return $this->aggregateGraphPoints($points, $aggregate);
+                })->values(),
+            ];
+        }
+
+        return [$labels, $datasets];
+    }
+
+    private function getBucketKey(Carbon $date, string $bucketSize): string
+    {
+        return match ($bucketSize) {
+            'day' => $date->format('Y-m-d'),
+            'week' => $date->copy()->startOfWeek()->format('Y-m-d'),
+            'month' => $date->format('Y-m'),
+            default => $date->format('Y-m-d H:i'),
+        };
+    }
+
+    private function aggregateGraphPoints(\Illuminate\Support\Collection $points, string $aggregate): float|int
+    {
+        return match ($aggregate) {
+            'average' => round($points->avg('value'), 4),
+            'min' => $points->min('value'),
+            'max' => $points->max('value'),
+            'sum' => round($points->sum('value'), 4),
+            default => $points->sortByDesc('record_date')->first()['value'],
+        };
+    }
+
+    private function getGraphRangeStart(string $rangeType): ?Carbon
+    {
+        return match ($rangeType) {
+            'last_30_days' => now()->subDays(30),
+            'last_6_months' => now()->subMonths(6),
+            'last_12_months' => now()->subMonths(12),
+            default => null,
+        };
+    }
+
+    private function getRangeLabel(string $rangeType): string
+    {
+        return match ($rangeType) {
+            'last_30_days' => 'Last 30 days',
+            'last_6_months' => 'Last 6 months',
+            'last_12_months' => 'Last 12 months',
+            default => 'All time',
+        };
+    }
+
+    private function getBucketLabel(string $bucketSize): string
+    {
+        return match ($bucketSize) {
+            'day' => 'Grouped by day',
+            'week' => 'Grouped by week',
+            'month' => 'Grouped by month',
+            default => 'Raw timeline',
+        };
+    }
+
+    private function getAggregateLabel(string $aggregate): string
+    {
+        return match ($aggregate) {
+            'average' => 'Average',
+            'min' => 'Minimum',
+            'max' => 'Maximum',
+            'sum' => 'Sum',
+            default => 'Latest',
+        };
     }
 }
