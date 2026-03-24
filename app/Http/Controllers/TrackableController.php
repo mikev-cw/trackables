@@ -14,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class TrackableController extends Controller
 {
@@ -44,7 +45,7 @@ class TrackableController extends Controller
     public function storeSingleRecord(Request $request)
     {
         $trackable = $request->trackable;
-        $validated = $this->validateSingleRecord($request, $trackable);
+        $validated = $this->validateSingleRecord($request, $trackable, $this->normalizeApiRecordPayload($request->all(), $trackable));
         $record = $this->persistSingleRecord($trackable, $validated);
 
         return response()->json([
@@ -56,12 +57,12 @@ class TrackableController extends Controller
 
     public function storeBulkRecords(Request $request): \Illuminate\Http\JsonResponse
     {
-        $schema = $request->trackable->schema->keyBy('uid');
+        $schema = $request->trackable->schema;
+        $items = collect($request->input('records', []))
+            ->map(fn ($record) => $this->normalizeApiRecordPayload($record, $request->trackable))
+            ->all();
 
-        // Generate validation rules dynamically from the schema
-        $validationRules = $schema->mapWithKeys(function ($item, $key) {
-            return ["records.*.$key" => $item->validation_rule];
-        })->toArray();
+        $validationRules = $this->getSingleRecordValidationRules($schema->keyBy('uid'));
 
         if (empty($validationRules)) {
             return response()->json([
@@ -70,12 +71,18 @@ class TrackableController extends Controller
             ], 400);
         }
 
-        // Validate all records
-        $validated = $request->validate([
-                'records' => 'required|array|min:1',
-            ] + $validationRules);
+        validator([
+            'records' => $items,
+        ], [
+            'records' => 'required|array|min:1',
+            'records.*' => 'array',
+        ])->validate();
 
-        $items = $validated['records'];
+        foreach ($items as $index => $recordData) {
+            validator($recordData, $validationRules, [], collect($schema)->mapWithKeys(function ($field) {
+                return [$field->uid => $field->alias ?: $field->name];
+            })->all())->validate();
+        }
 
         $recordsCreated =[];
 
@@ -119,6 +126,7 @@ class TrackableController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|max:80',
+            'alias' => 'nullable|string|max:80',
             'field_type' => 'required',
             'enum_uid' => 'nullable',
             'calc_formula' => 'nullable',
@@ -128,6 +136,11 @@ class TrackableController extends Controller
         return TrackableSchema::create([
             'trackable_uid' => $request->trackable->uid,
             'name' => $validated['name'],
+            'alias' => TrackableSchema::generateUniqueAlias(
+                $request->trackable->uid,
+                $validated['name'],
+                $validated['alias'] ?? null
+            ),
             'field_type' => $validated['field_type'],
             'enum_uid' => $validated['enum_uid'] ?? null,
             'calc_formula' => $validated['calc_formula'] ?? null,
@@ -145,6 +158,7 @@ class TrackableController extends Controller
         // https://laravel.com/docs/11.x/validation#available-validation-rules
         $rules = [
             'name' => 'sometimes|string|max:80',
+            'alias' => 'sometimes|string|max:80',
             'field_type' => 'sometimes|string',
             'enum_uid' => 'sometimes|string|max:24',
             'calc_formula' => 'sometimes|',
@@ -159,7 +173,18 @@ class TrackableController extends Controller
         }
 
         // Update only the provided fields
-        $model->update($request->only(array_keys($rules)));
+        $payload = $request->only(array_keys($rules));
+
+        if (array_key_exists('name', $payload) || array_key_exists('alias', $payload)) {
+            $payload['alias'] = TrackableSchema::generateUniqueAlias(
+                $model->trackable_uid,
+                $payload['name'] ?? $model->name,
+                $payload['alias'] ?? $model->alias,
+                $model->uid
+            );
+        }
+
+        $model->update($payload);
 
         return response()->json(['message' => 'Model updated successfully', 'data' => $model], 200);
     }
@@ -405,7 +430,7 @@ class TrackableController extends Controller
             ->with('status', 'Graph deleted successfully.');
     }
 
-    private function validateSingleRecord(Request $request, Trackable $trackable): array
+    private function validateSingleRecord(Request $request, Trackable $trackable, ?array $payload = null): array
     {
         $schema = $trackable->schema->keyBy('uid');
         $validationRules = $this->getSingleRecordValidationRules($schema);
@@ -414,7 +439,14 @@ class TrackableController extends Controller
             abort(400, 'No validation rules were applied. Ensure your input matches the schema.');
         }
 
-        return $request->validate($validationRules);
+        return validator(
+            $payload ?? $request->all(),
+            $validationRules,
+            [],
+            $schema->mapWithKeys(function ($field) {
+                return [$field->uid => $field->alias ?: $field->name];
+            })->all()
+        )->validate();
     }
 
     private function getSingleRecordValidationRules(Collection $schema): array
@@ -427,6 +459,26 @@ class TrackableController extends Controller
     private function usesExactSchemaFilter(?string $fieldType): bool
     {
         return in_array($fieldType, ['int', 'float', 'bool', 'date', 'datetime'], true);
+    }
+
+    private function normalizeApiRecordPayload(array $payload, Trackable $trackable): array
+    {
+        $schema = $trackable->schema;
+        $schemaByUid = $schema->keyBy('uid');
+        $schemaByAlias = $schema->filter(fn ($field) => !empty($field->alias))->keyBy('alias');
+        $normalized = [];
+
+        foreach ($payload as $key => $value) {
+            $field = $schemaByUid->get($key) ?? $schemaByAlias->get(Str::snake((string) $key));
+
+            if (!$field) {
+                continue;
+            }
+
+            $normalized[$field->uid] = $value;
+        }
+
+        return $normalized;
     }
 
     private function isGraphableFieldType(?string $fieldType): bool

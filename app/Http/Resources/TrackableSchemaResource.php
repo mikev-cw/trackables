@@ -17,6 +17,7 @@ class TrackableSchemaResource extends JsonResource
         return [
             'uid' => $this->uid,
             'name' => $this->name,
+            'alias' => $this->alias,
             'field_type' => $this->field_type,
             'validation_rule' => $this->validation_rule,
         ];
