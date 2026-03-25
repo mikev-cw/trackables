@@ -297,6 +297,73 @@ class TrackableController extends Controller
         ));
     }
 
+    public function createTrackablePage()
+    {
+        return view('trackables.create-trackable');
+    }
+
+    public function storeTrackable(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+        ]);
+
+        $trackable = Trackable::create([
+            'user_id' => $request->user()->id,
+            'name' => $validated['name'],
+            'deleted' => 0,
+        ]);
+
+        return redirect()
+            ->route('trackables.edit', $trackable->uid)
+            ->with('status', 'Trackable created successfully.');
+    }
+
+    public function editTrackablePage(Trackable $trackable)
+    {
+        $trackable->loadCount('schema');
+        $trackable->loadMax('records', 'record_date');
+
+        return view('trackables.edit-trackable', compact('trackable'));
+    }
+
+    public function updateTrackable(Request $request, Trackable $trackable)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+        ]);
+
+        $trackable->update([
+            'name' => $validated['name'],
+        ]);
+
+        return redirect()
+            ->route('trackables.edit', $trackable->uid)
+            ->with('status', 'Trackable updated successfully.');
+    }
+
+    public function toggleTrackable(Trackable $trackable)
+    {
+        $trackable->update([
+            'deleted' => !$trackable->deleted,
+        ]);
+
+        return redirect()
+            ->route('dashboard')
+            ->with('status', $trackable->deleted ? 'Trackable disabled.' : 'Trackable enabled.');
+    }
+
+    public function editSchemaPage(Trackable $trackable)
+    {
+        $trackable->load(['schema' => fn ($query) => $query->orderBy('created_at')]);
+
+        return view('trackables.edit-schema', [
+            'trackable' => $trackable,
+            'schemaFields' => $trackable->schema,
+            'fieldTypeOptions' => ['int', 'float', 'json', 'string', 'bool', 'date', 'datetime', 'img', 'url', 'enum', 'calc'],
+        ]);
+    }
+
     public function statistics(Trackable $trackable)
     {
         $trackable->load([
@@ -383,6 +450,54 @@ class TrackableController extends Controller
             ->with('status', 'Graph added successfully.');
     }
 
+    public function storeSchemaFromPage(Request $request, Trackable $trackable)
+    {
+        $validated = $this->validateSchemaPayload($request);
+
+        TrackableSchema::create([
+            'trackable_uid' => $trackable->uid,
+            'name' => $validated['name'],
+            'alias' => TrackableSchema::generateUniqueAlias(
+                $trackable->uid,
+                $validated['name'],
+                $validated['alias'] ?? null
+            ),
+            'field_type' => $validated['field_type'],
+            'enum_uid' => $validated['enum_uid'] ?? null,
+            'calc_formula' => $validated['calc_formula'] ?? null,
+            'validation_rule' => $validated['validation_rule'],
+        ]);
+
+        return redirect()
+            ->route('trackables.schema.edit', $trackable->uid)
+            ->with('status', 'Schema field added successfully.');
+    }
+
+    public function updateSchemaFromPage(Request $request, Trackable $trackable, TrackableSchema $schema)
+    {
+        abort_unless($schema->trackable_uid === $trackable->uid, 404);
+
+        $validated = $this->validateSchemaPayload($request);
+
+        $schema->update([
+            'name' => $validated['name'],
+            'alias' => TrackableSchema::generateUniqueAlias(
+                $trackable->uid,
+                $validated['name'],
+                $validated['alias'] ?? null,
+                $schema->uid
+            ),
+            'field_type' => $validated['field_type'],
+            'enum_uid' => $validated['enum_uid'] ?? null,
+            'calc_formula' => $validated['calc_formula'] ?? null,
+            'validation_rule' => $validated['validation_rule'],
+        ]);
+
+        return redirect()
+            ->route('trackables.schema.edit', $trackable->uid)
+            ->with('status', 'Schema field updated successfully.');
+    }
+
     public function editGraph(Trackable $trackable, TrackableGraph $graph)
     {
         $trackable->load(['schema' => fn ($query) => $query->orderBy('created_at')]);
@@ -447,6 +562,18 @@ class TrackableController extends Controller
                 return [$field->uid => $field->alias ?: $field->name];
             })->all()
         )->validate();
+    }
+
+    private function validateSchemaPayload(Request $request): array
+    {
+        return $request->validate([
+            'name' => 'required|string|max:80',
+            'alias' => 'nullable|string|max:80',
+            'field_type' => 'required|string',
+            'enum_uid' => 'nullable|string|max:24',
+            'calc_formula' => 'nullable',
+            'validation_rule' => 'required|string',
+        ]);
     }
 
     private function getSingleRecordValidationRules(Collection $schema): array

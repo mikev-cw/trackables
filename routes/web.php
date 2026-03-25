@@ -16,6 +16,26 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('/trackables/', [DashboardController::class, 'index'])->name('trackables_index');
+    Route::get('/trackables/create', [TrackableController::class, 'createTrackablePage'])->name('trackables.create');
+    Route::post('/trackables', [TrackableController::class, 'storeTrackable'])->name('trackables.store');
+    Route::get('/trackables/{trackable}/edit', [TrackableController::class, 'editTrackablePage'])
+        ->can('own', 'trackable')
+        ->name('trackables.edit');
+    Route::put('/trackables/{trackable}', [TrackableController::class, 'updateTrackable'])
+        ->can('own', 'trackable')
+        ->name('trackables.update');
+    Route::patch('/trackables/{trackable}/toggle', [TrackableController::class, 'toggleTrackable'])
+        ->can('own', 'trackable')
+        ->name('trackables.toggle');
+    Route::get('/trackables/{trackable}/schema/edit', [TrackableController::class, 'editSchemaPage'])
+        ->can('own', 'trackable')
+        ->name('trackables.schema.edit');
+    Route::post('/trackables/{trackable}/schema', [TrackableController::class, 'storeSchemaFromPage'])
+        ->can('own', 'trackable')
+        ->name('trackables.schema.store');
+    Route::put('/trackables/{trackable}/schema/{schema}', [TrackableController::class, 'updateSchemaFromPage'])
+        ->can('own', 'trackable')
+        ->name('trackables.schema.update');
     Route::get('/trackables/{trackable}/records/create', [TrackableController::class, 'createRecord'])
         ->can('own', 'trackable')
         ->name('trackables.records.create');

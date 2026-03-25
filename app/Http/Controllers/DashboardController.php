@@ -2,20 +2,21 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Trackable;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
     public function index()
     {
-        $listCollection = $this->getTrackables();
-        $list = $listCollection->resource;
-        return view('dashboard', compact('list'));
-    }
+        $list = Trackable::query()
+            ->where('user_id', request()->user()->id)
+            ->withMax('records', 'record_date')
+            ->withCount('schema')
+            ->orderBy('deleted')
+            ->orderByDesc('updated_at')
+            ->paginate(12);
 
-    public function getTrackables() {
-        // Implementation for fetching trackables
-        $t = new TrackableController();
-        return $t->list(request());
+        return view('dashboard', compact('list'));
     }
 }
