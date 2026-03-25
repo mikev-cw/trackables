@@ -43,22 +43,26 @@ class TrackableManagementTest extends TestCase
 
         $createResponse = $this->actingAs($user)->post(route('trackables.store'), [
             'name' => 'Office climate',
+            'alias' => 'office_climate',
         ]);
 
         $trackable = Trackable::first();
 
         $createResponse->assertRedirect(route('trackables.edit', $trackable->uid));
         $this->assertSame('Office climate', $trackable->name);
+        $this->assertSame('office_climate', $trackable->alias);
         $this->assertSame(0, $trackable->deleted);
 
         $updateResponse = $this->actingAs($user)->put(route('trackables.update', $trackable->uid), [
             'name' => 'Office climate sensors',
+            'alias' => 'office_climate_sensors',
         ]);
 
         $updateResponse->assertRedirect(route('trackables.edit', $trackable->uid));
         $this->assertDatabaseHas('trackables', [
             'uid' => $trackable->uid,
             'name' => 'Office climate sensors',
+            'alias' => 'office_climate_sensors',
         ]);
 
         $toggleResponse = $this->actingAs($user)->patch(route('trackables.toggle', $trackable->uid));

@@ -22,6 +22,21 @@
                     <div class="invalid-feedback d-block">{{ $message }}</div>
                 @enderror
             </div>
+            <div>
+                <label class="form-label" for="trackable-alias">Alias</label>
+                <input
+                    class="form-control @error('alias') is-invalid @enderror"
+                    id="trackable-alias"
+                    name="alias"
+                    type="text"
+                    value="{{ old('alias', $trackable->alias ?? '') }}"
+                    placeholder="fuel_prices"
+                >
+                <div class="form-hint">Readable identifier for API routes and integrations.</div>
+                @error('alias')
+                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                @enderror
+            </div>
         </div>
         <div class="card-footer">
             <button type="submit" class="btn btn-primary">{{ $submitLabel }}</button>

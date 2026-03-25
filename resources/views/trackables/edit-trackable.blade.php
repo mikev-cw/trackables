@@ -30,6 +30,10 @@
                         <div class="fw-semibold">{{ $trackable->deleted ? 'Disabled' : 'Enabled' }}</div>
                     </div>
                     <div>
+                        <div class="text-secondary small">Alias</div>
+                        <div class="fw-semibold font-monospace">{{ $trackable->alias }}</div>
+                    </div>
+                    <div>
                         <div class="text-secondary small">Schema fields</div>
                         <div class="fw-semibold">{{ $trackable->schema_count }}</div>
                     </div>

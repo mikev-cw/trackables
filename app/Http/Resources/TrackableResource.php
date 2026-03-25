@@ -17,6 +17,7 @@ class TrackableResource extends JsonResource
         return [
             'uid' => $this->uid,
             'name' => $this->name,
+            'alias' => $this->alias,
             'user_name' => $this->user->name ?? '',
             'user_id' => $this->user_id,
             'created_at' => $this->created_at,

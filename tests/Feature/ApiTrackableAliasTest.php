@@ -19,6 +19,7 @@ class ApiTrackableAliasTest extends TestCase
         $trackable = Trackable::create([
             'user_id' => $user->id,
             'name' => 'Fuel log',
+            'alias' => 'fuel_log',
         ]);
 
         TrackableSchema::create([
@@ -34,6 +35,7 @@ class ApiTrackableAliasTest extends TestCase
         $response = $this->getJson('/api/trackable');
 
         $response->assertOk();
+        $response->assertJsonPath('data.0.alias', 'fuel_log');
         $response->assertJsonPath('data.0.schema.0.alias', 'pump_name');
     }
 
@@ -43,6 +45,7 @@ class ApiTrackableAliasTest extends TestCase
         $trackable = Trackable::create([
             'user_id' => $user->id,
             'name' => 'Fuel log',
+            'alias' => 'fuel_log',
         ]);
 
         $pumpName = TrackableSchema::create([
@@ -63,7 +66,7 @@ class ApiTrackableAliasTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $response = $this->postJson("/api/trackable/{$trackable->uid}/record", [
+        $response = $this->postJson("/api/trackable/{$trackable->alias}/record", [
             'records' => [
                 [
                     'pump_name' => 'Esso Via Roma 4',

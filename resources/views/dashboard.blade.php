@@ -33,6 +33,9 @@
                                         <div class="text-secondary small">
                                             UID: <span class="font-monospace">{{ $trackable->uid }}</span>
                                         </div>
+                                        <div class="text-secondary small">
+                                            Alias: <span class="font-monospace">{{ $trackable->alias }}</span>
+                                        </div>
                                     </div>
                                     <span class="badge {{ $trackable->deleted ? 'bg-red-lt' : 'bg-azure-lt' }}">
                                         {{ $trackable->deleted ? 'Disabled' : 'Active' }}

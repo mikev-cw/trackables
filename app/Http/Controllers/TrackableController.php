@@ -23,11 +23,13 @@ class TrackableController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|max:255',
+            'alias' => 'nullable|string|max:255',
         ]);
 
         $t = Trackable::create([
             'user_id' => Auth::id(),
             'name' => $validated['name'],
+            'alias' => Trackable::generateUniqueAlias($validated['name'], $validated['alias'] ?? null),
         ]);
 
         return $t;
@@ -306,11 +308,13 @@ class TrackableController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'alias' => 'nullable|string|max:255',
         ]);
 
         $trackable = Trackable::create([
             'user_id' => $request->user()->id,
             'name' => $validated['name'],
+            'alias' => Trackable::generateUniqueAlias($validated['name'], $validated['alias'] ?? null),
             'deleted' => 0,
         ]);
 
@@ -331,10 +335,16 @@ class TrackableController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'alias' => 'nullable|string|max:255',
         ]);
 
         $trackable->update([
             'name' => $validated['name'],
+            'alias' => Trackable::generateUniqueAlias(
+                $validated['name'],
+                $validated['alias'] ?? null,
+                $trackable->uid
+            ),
         ]);
 
         return redirect()

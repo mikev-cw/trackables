@@ -20,9 +20,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Bind in routes the 'uid' param instead of the default
+        // Bind in routes the uid or alias param instead of the default.
         $this->app['router']->bind('trackable', function ($value) {
-            return Trackable::where('uid', $value)->firstOrFail();
+            return Trackable::where('uid', $value)
+                ->orWhere('alias', $value)
+                ->firstOrFail();
         });
     }
 }
