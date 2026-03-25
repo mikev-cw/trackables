@@ -290,14 +290,13 @@ class TrackableRecordPageTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('beta target');
-        $response->assertDontSee('alpha');
-        $response->assertDontSee('gamma');
 
         $records = $response->viewData('records');
 
         $this->assertSame(1, $records->total());
         $this->assertSame(25, $records->perPage());
         $this->assertSame($secondRecord->uid, $records->items()[0]->uid);
+        $this->assertSame('beta target', $records->items()[0]->data->first()->value);
     }
 
     public function test_show_page_filters_by_specific_schema_field(): void
