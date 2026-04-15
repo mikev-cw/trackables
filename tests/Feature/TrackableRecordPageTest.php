@@ -35,6 +35,7 @@ class TrackableRecordPageTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Add data to Vitals');
+        $response->assertSee('Measurement date and time');
         $response->assertSee('Weight');
     }
 
@@ -83,6 +84,7 @@ class TrackableRecordPageTest extends TestCase
         ]);
 
         $response = $this->actingAs($user)->post(route('trackables.records.store', $trackable->uid), [
+            'record_date' => '2026-04-10T07:45',
             $weight->uid => '72.4',
             $note->uid => 'Morning check-in',
         ]);
@@ -94,6 +96,7 @@ class TrackableRecordPageTest extends TestCase
 
         $this->assertNotNull($record);
         $this->assertSame($trackable->uid, $record->trackable_uid);
+        $this->assertSame('2026-04-10 07:45:00', Carbon::parse($record->record_date)->format('Y-m-d H:i:s'));
         $this->assertDatabaseHas('trackable_data', [
             'trackable_record_uid' => $record->uid,
             'trackable_schema_uid' => $weight->uid,

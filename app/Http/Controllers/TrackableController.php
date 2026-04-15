@@ -47,8 +47,10 @@ class TrackableController extends Controller
     public function storeSingleRecord(Request $request)
     {
         $trackable = $request->trackable;
-        $validated = $this->validateSingleRecord($request, $trackable, $this->normalizeApiRecordPayload($request->all(), $trackable));
-        $record = $this->persistSingleRecord($trackable, $validated);
+        $normalizedPayload = $this->normalizeApiRecordPayload($request->all(), $trackable);
+        $this->validateRecordDateValue($normalizedPayload['record_date'] ?? null);
+        $validated = $this->validateSingleRecord($request, $trackable, $normalizedPayload['data']);
+        $record = $this->persistSingleRecord($trackable, $validated, $normalizedPayload['record_date'] ?? null);
 
         return response()->json([
             'record_uid' => $record->uid,
@@ -60,7 +62,8 @@ class TrackableController extends Controller
     public function storeBulkRecords(Request $request): \Illuminate\Http\JsonResponse
     {
         $schema = $request->trackable->schema;
-        $items = collect($request->input('records', []))
+        $rawItems = $request->has('records') ? $request->input('records', []) : [$request->all()];
+        $items = collect($rawItems)
             ->map(fn ($record) => $this->normalizeApiRecordPayload($record, $request->trackable))
             ->all();
 
@@ -80,7 +83,9 @@ class TrackableController extends Controller
             'records.*' => 'array',
         ])->validate();
 
-        foreach ($items as $index => $recordData) {
+        foreach ($items as $index => $recordItem) {
+            $this->validateRecordDateValue($recordItem['record_date'] ?? null);
+            $recordData = $recordItem['data'];
             validator($recordData, $validationRules, [], collect($schema)->mapWithKeys(function ($field) {
                 return [$field->uid => $field->alias ?: $field->name];
             })->all())->validate();
@@ -89,11 +94,12 @@ class TrackableController extends Controller
         $recordsCreated =[];
 
         DB::transaction(function () use (&$request, &$items, &$recordsCreated) {
-            foreach ($items as $recordData) {
+            foreach ($items as $recordItem) {
+                $recordData = $recordItem['data'];
                 // Create a record
                 $record = TrackableRecord::create([
                     'trackable_uid' => $request->trackable->uid,
-                    'record_date' => now(),
+                    'record_date' => $this->resolveRecordDate($recordItem['record_date'] ?? null),
                 ]);
 
                 $recordsCreated[] = $record->uid;
@@ -410,8 +416,9 @@ class TrackableController extends Controller
 
     public function storeRecord(Request $request, Trackable $trackable)
     {
+        $this->validateRecordDateValue($request->input('record_date'));
         $validated = $this->validateSingleRecord($request, $trackable);
-        $this->persistSingleRecord($trackable, $validated);
+        $this->persistSingleRecord($trackable, $validated, $request->input('record_date'));
 
         return redirect()
             ->route('trackables.show', $trackable->uid)
@@ -604,8 +611,13 @@ class TrackableController extends Controller
         $schemaByUid = $schema->keyBy('uid');
         $schemaByAlias = $schema->filter(fn ($field) => !empty($field->alias))->keyBy('alias');
         $normalized = [];
+        $recordDate = $payload['record_date'] ?? null;
 
         foreach ($payload as $key => $value) {
+            if ($key === 'record_date') {
+                continue;
+            }
+
             $field = $schemaByUid->get($key) ?? $schemaByAlias->get(Str::snake((string) $key));
 
             if (!$field) {
@@ -615,7 +627,10 @@ class TrackableController extends Controller
             $normalized[$field->uid] = $value;
         }
 
-        return $normalized;
+        return [
+            'record_date' => $recordDate,
+            'data' => $normalized,
+        ];
     }
 
     private function isGraphableFieldType(?string $fieldType): bool
@@ -726,12 +741,12 @@ class TrackableController extends Controller
             ->toArray();
     }
 
-    private function persistSingleRecord(Trackable $trackable, array $validated): TrackableRecord
+    private function persistSingleRecord(Trackable $trackable, array $validated, mixed $recordDate = null): TrackableRecord
     {
-        return DB::transaction(function () use ($trackable, $validated) {
+        return DB::transaction(function () use ($trackable, $validated, $recordDate) {
             $record = TrackableRecord::create([
                 'trackable_uid' => $trackable->uid,
-                'record_date' => now(),
+                'record_date' => $this->resolveRecordDate($recordDate),
             ]);
 
             foreach ($validated as $key => $value) {
@@ -744,6 +759,23 @@ class TrackableController extends Controller
 
             return $record;
         });
+    }
+
+    private function resolveRecordDate(mixed $recordDate = null): Carbon
+    {
+        if (blank($recordDate)) {
+            return now();
+        }
+
+        return Carbon::parse($recordDate);
+    }
+
+    private function validateRecordDateValue(mixed $recordDate = null): void
+    {
+        validator(
+            ['record_date' => $recordDate],
+            ['record_date' => 'nullable|date']
+        )->validate();
     }
 
     private function updateSingleRecord(TrackableRecord $record, array $validated): void

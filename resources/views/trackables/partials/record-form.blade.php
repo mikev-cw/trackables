@@ -9,6 +9,22 @@
         @endif
         <div class="card-body">
             <div class="row g-4">
+                @if(!empty($showRecordDateInput))
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="record-date">Measurement date and time</label>
+                        <input
+                            class="form-control @error('record_date') is-invalid @enderror"
+                            type="datetime-local"
+                            id="record-date"
+                            name="record_date"
+                            value="{{ old('record_date', $recordDateValue ?? now()->format('Y-m-d\\TH:i')) }}"
+                        >
+                        <div class="form-hint">Leave as is to use the current moment, or enter a past measurement time.</div>
+                        @error('record_date')
+                            <div class="invalid-feedback d-block">{{ $message }}</div>
+                        @enderror
+                    </div>
+                @endif
                 @forelse($schema as $field)
                     @php
                         $fieldValue = old($field->uid, $recordValues[$field->uid] ?? '');

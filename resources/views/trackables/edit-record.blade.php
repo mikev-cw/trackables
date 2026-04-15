@@ -23,6 +23,7 @@
         'method' => 'PUT',
         'cardTitle' => 'Record data',
         'recordValues' => $recordValues,
+        'showRecordDateInput' => false,
         'footerText' => 'Updating a record refreshes its saved timestamp.',
         'submitLabel' => 'Update record',
     ])

@@ -19,7 +19,6 @@ class TrackableSchemaFactory extends Factory
         return [
             'name' => fake()->sentence(2),
             'field_type' => fake()->randomElement(['int', 'float', 'string']),
-            'required' => (mt_rand(1, 100) <= 80) ? 1 : 0,
             'validation_rule' => '[]'
         ];
     }

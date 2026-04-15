@@ -23,7 +23,9 @@
         'method' => 'POST',
         'cardTitle' => 'Record data',
         'recordValues' => [],
-        'footerText' => 'Record date is saved automatically.',
+        'recordDateValue' => now()->format('Y-m-d\TH:i'),
+        'showRecordDateInput' => true,
+        'footerText' => 'The measurement time can be set manually when needed.',
         'submitLabel' => 'Save record',
     ])
 </x-layout>
