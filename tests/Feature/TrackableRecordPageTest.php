@@ -137,6 +137,7 @@ class TrackableRecordPageTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Edit data in Vitals');
+        $response->assertSee('Measurement date and time');
         $response->assertSee('72.4');
     }
 
@@ -177,6 +178,7 @@ class TrackableRecordPageTest extends TestCase
         ]);
 
         $response = $this->actingAs($user)->put(route('trackables.records.update', [$trackable->uid, $record->uid]), [
+            'record_date' => '2026-02-25T18:30',
             $weight->uid => '74.1',
             $note->uid => 'Evening check-in',
         ]);
@@ -197,6 +199,39 @@ class TrackableRecordPageTest extends TestCase
             'trackable_schema_uid' => $note->uid,
             'value' => 'Evening check-in',
         ]);
+        $record->refresh();
+        $this->assertSame('2026-02-25 18:30:00', Carbon::parse($record->record_date)->format('Y-m-d H:i:s'));
+    }
+
+    public function test_posting_record_data_rejects_future_measurement_date(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-04-15 10:00:00'));
+
+        $user = User::factory()->create();
+        $trackable = Trackable::create([
+            'user_id' => $user->id,
+            'name' => 'Vitals',
+        ]);
+
+        $weight = TrackableSchema::create([
+            'trackable_uid' => $trackable->uid,
+            'name' => 'Weight',
+            'field_type' => 'float',
+            'validation_rule' => 'required|numeric',
+        ]);
+
+        $response = $this->from(route('trackables.records.create', $trackable->uid))
+            ->actingAs($user)
+            ->post(route('trackables.records.store', $trackable->uid), [
+                'record_date' => '2026-04-16T07:45',
+                $weight->uid => '72.4',
+            ]);
+
+        $response->assertRedirect(route('trackables.records.create', $trackable->uid));
+        $response->assertSessionHasErrors('record_date');
+        $this->assertDatabaseCount('trackable_records', 0);
+
+        Carbon::setTestNow();
     }
 
     public function test_deleting_record_removes_record_and_related_values(): void

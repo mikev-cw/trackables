@@ -430,15 +430,17 @@ class TrackableController extends Controller
         $record = $this->getTrackableRecordOrFail($trackable, $record);
         $schema = $trackable->schema()->orderBy('created_at')->get();
         $recordValues = $this->getRecordValues($record);
+        $recordDateValue = optional($record->record_date)->format('Y-m-d\TH:i');
 
-        return view('trackables.edit-record', compact('trackable', 'record', 'schema', 'recordValues'));
+        return view('trackables.edit-record', compact('trackable', 'record', 'schema', 'recordValues', 'recordDateValue'));
     }
 
     public function updateRecord(Request $request, Trackable $trackable, TrackableRecord $record)
     {
         $record = $this->getTrackableRecordOrFail($trackable, $record);
+        $this->validateRecordDateValue($request->input('record_date'));
         $validated = $this->validateSingleRecord($request, $trackable);
-        $this->updateSingleRecord($record, $validated);
+        $this->updateSingleRecord($record, $validated, $request->input('record_date'));
 
         return redirect()
             ->route('trackables.show', $trackable->uid)
@@ -774,15 +776,15 @@ class TrackableController extends Controller
     {
         validator(
             ['record_date' => $recordDate],
-            ['record_date' => 'nullable|date']
+            ['record_date' => 'nullable|date|before_or_equal:now']
         )->validate();
     }
 
-    private function updateSingleRecord(TrackableRecord $record, array $validated): void
+    private function updateSingleRecord(TrackableRecord $record, array $validated, mixed $recordDate = null): void
     {
-        DB::transaction(function () use ($record, $validated) {
+        DB::transaction(function () use ($record, $validated, $recordDate) {
             $record->update([
-                'record_date' => now(),
+                'record_date' => $this->resolveRecordDate($recordDate),
             ]);
 
             $existingData = $record->data()->get()->keyBy('trackable_schema_uid');

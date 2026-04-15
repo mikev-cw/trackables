@@ -17,9 +17,10 @@
                             type="datetime-local"
                             id="record-date"
                             name="record_date"
+                            max="{{ now()->format('Y-m-d\\TH:i') }}"
                             value="{{ old('record_date', $recordDateValue ?? now()->format('Y-m-d\\TH:i')) }}"
                         >
-                        <div class="form-hint">Leave as is to use the current moment, or enter a past measurement time.</div>
+                        <div class="form-hint">Leave as is to use the current moment, or enter a past measurement time. Future dates are not allowed.</div>
                         @error('record_date')
                             <div class="invalid-feedback d-block">{{ $message }}</div>
                         @enderror

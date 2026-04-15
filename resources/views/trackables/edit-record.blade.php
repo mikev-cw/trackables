@@ -23,8 +23,9 @@
         'method' => 'PUT',
         'cardTitle' => 'Record data',
         'recordValues' => $recordValues,
-        'showRecordDateInput' => false,
-        'footerText' => 'Updating a record refreshes its saved timestamp.',
+        'recordDateValue' => $recordDateValue,
+        'showRecordDateInput' => true,
+        'footerText' => 'Measurement time can be corrected here, but future dates are not allowed.',
         'submitLabel' => 'Update record',
     ])
 </x-layout>

@@ -125,4 +125,37 @@ class ApiTrackableAliasTest extends TestCase
             'value' => 'Eni Central Station',
         ]);
     }
+
+    public function test_api_rejects_future_record_date(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-04-15 10:00:00'));
+
+        $user = User::factory()->create();
+        $trackable = Trackable::create([
+            'user_id' => $user->id,
+            'name' => 'Fuel log',
+            'alias' => 'fuel_log',
+        ]);
+
+        TrackableSchema::create([
+            'trackable_uid' => $trackable->uid,
+            'name' => 'Pump Name',
+            'alias' => 'pump_name',
+            'field_type' => 'string',
+            'validation_rule' => 'required|string',
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->postJson("/api/trackable/{$trackable->alias}/record", [
+            'record_date' => '2026-04-16T19:10:00+02:00',
+            'pump_name' => 'Eni Central Station',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors('record_date');
+        $this->assertDatabaseCount('trackable_records', 0);
+
+        Carbon::setTestNow();
+    }
 }
