@@ -17,4 +17,8 @@
         --tblr-navbar-bg: var(--tblr-primary);
         --tblr-navbar-color: var(--tblr-on-primary, #fff);
     }
+
+    html {
+        margin-left: 0 !important;
+    }
 </style>
