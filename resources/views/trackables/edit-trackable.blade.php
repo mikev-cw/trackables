@@ -34,6 +34,10 @@
                         <div class="fw-semibold font-monospace">{{ $trackable->alias }}</div>
                     </div>
                     <div>
+                        <div class="text-secondary small">Group</div>
+                        <div class="fw-semibold">{{ $trackable->group?->name ?? 'No group' }}</div>
+                    </div>
+                    <div>
                         <div class="text-secondary small">Schema fields</div>
                         <div class="fw-semibold">{{ $trackable->schema_count }}</div>
                     </div>

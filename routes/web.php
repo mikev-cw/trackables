@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\TrackableController;
+use App\Http\Controllers\TrackableGroupController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -16,6 +17,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('/trackables/', [DashboardController::class, 'index'])->name('trackables_index');
+    Route::get('/trackable-groups', [TrackableGroupController::class, 'index'])->name('trackable-groups.index');
+    Route::get('/trackable-groups/create', [TrackableGroupController::class, 'create'])->name('trackable-groups.create');
+    Route::post('/trackable-groups', [TrackableGroupController::class, 'store'])->name('trackable-groups.store');
+    Route::get('/trackable-groups/{trackableGroup}/edit', [TrackableGroupController::class, 'edit'])->name('trackable-groups.edit');
+    Route::put('/trackable-groups/{trackableGroup}', [TrackableGroupController::class, 'update'])->name('trackable-groups.update');
+    Route::patch('/trackable-groups/{trackableGroup}/toggle', [TrackableGroupController::class, 'toggle'])->name('trackable-groups.toggle');
     Route::get('/trackables/create', [TrackableController::class, 'createTrackablePage'])->name('trackables.create');
     Route::post('/trackables', [TrackableController::class, 'storeTrackable'])->name('trackables.store');
     Route::get('/trackables/{trackable}/edit', [TrackableController::class, 'editTrackablePage'])

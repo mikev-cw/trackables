@@ -9,7 +9,7 @@ class Trackable extends baseModel
 {
     use HasFactory;
 
-    protected $fillable = ['uid', 'user_id', 'name', 'alias', 'deleted'];
+    protected $fillable = ['uid', 'user_id', 'group_uid', 'name', 'alias', 'deleted'];
 
     protected static function boot()
     {
@@ -42,6 +42,10 @@ class Trackable extends baseModel
 
     public function user() {
         return $this->belongsTo(User::class);
+    }
+
+    public function group() {
+        return $this->belongsTo(TrackableGroup::class, 'group_uid', 'uid');
     }
 
     public function schema() {

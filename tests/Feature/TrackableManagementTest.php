@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Trackable;
+use App\Models\TrackableGroup;
 use App\Models\TrackableRecord;
 use App\Models\TrackableSchema;
 use App\Models\User;
@@ -40,10 +41,15 @@ class TrackableManagementTest extends TestCase
     public function test_trackable_can_be_created_updated_and_toggled_from_web_pages(): void
     {
         $user = User::factory()->create();
+        $group = TrackableGroup::create([
+            'user_id' => $user->id,
+            'name' => 'Transport',
+        ]);
 
         $createResponse = $this->actingAs($user)->post(route('trackables.store'), [
             'name' => 'Office climate',
             'alias' => 'office_climate',
+            'group_uid' => $group->uid,
         ]);
 
         $trackable = Trackable::first();
@@ -51,11 +57,13 @@ class TrackableManagementTest extends TestCase
         $createResponse->assertRedirect(route('trackables.edit', $trackable->uid));
         $this->assertSame('Office climate', $trackable->name);
         $this->assertSame('office_climate', $trackable->alias);
+        $this->assertSame($group->uid, $trackable->group_uid);
         $this->assertSame(0, $trackable->deleted);
 
         $updateResponse = $this->actingAs($user)->put(route('trackables.update', $trackable->uid), [
             'name' => 'Office climate sensors',
             'alias' => 'office_climate_sensors',
+            'group_uid' => null,
         ]);
 
         $updateResponse->assertRedirect(route('trackables.edit', $trackable->uid));
@@ -63,6 +71,7 @@ class TrackableManagementTest extends TestCase
             'uid' => $trackable->uid,
             'name' => 'Office climate sensors',
             'alias' => 'office_climate_sensors',
+            'group_uid' => null,
         ]);
 
         $toggleResponse = $this->actingAs($user)->patch(route('trackables.toggle', $trackable->uid));
@@ -70,6 +79,108 @@ class TrackableManagementTest extends TestCase
         $toggleResponse->assertRedirect(route('dashboard'));
         $this->assertDatabaseHas('trackables', [
             'uid' => $trackable->uid,
+            'deleted' => 1,
+        ]);
+    }
+
+    public function test_dashboard_arranges_trackables_by_group_when_groups_are_configured(): void
+    {
+        $user = User::factory()->create();
+        $transport = TrackableGroup::create([
+            'user_id' => $user->id,
+            'name' => 'Transport',
+            'description' => 'Trips and vehicle costs',
+        ]);
+
+        $fuel = Trackable::create([
+            'user_id' => $user->id,
+            'group_uid' => $transport->uid,
+            'name' => 'Fuel prices',
+        ]);
+        Trackable::create([
+            'user_id' => $user->id,
+            'group_uid' => $transport->uid,
+            'name' => 'Planes taken',
+        ]);
+        $sleep = Trackable::create([
+            'user_id' => $user->id,
+            'name' => 'Sleep',
+        ]);
+
+        $response = $this->actingAs($user)->get(route('dashboard'));
+
+        $response->assertOk();
+        $response->assertSee('Transport');
+        $response->assertSee('Trips and vehicle costs');
+        $response->assertSee('Fuel prices');
+        $response->assertSee('Planes taken');
+        $response->assertSeeInOrder(['Transport', 'Ungrouped', 'Sleep']);
+        $response->assertSee('data-bs-target="#dashboard-group-'.$transport->uid.'"', false);
+        $response->assertSee('data-dashboard-group-key="group-'.$transport->uid.'"', false);
+        $response->assertSee('id="dashboard-group-ungrouped"', false);
+        $response->assertSee('data-dashboard-group-key="ungrouped"', false);
+        $response->assertSee('trackables.dashboard.group.', false);
+        $response->assertDontSee('>Toggle<', false);
+        $response->assertSee(route('trackables.edit', $fuel->uid), false);
+        $response->assertSee(route('trackables.edit', $sleep->uid), false);
+    }
+
+    public function test_grouped_dashboard_paginates_trackables(): void
+    {
+        $user = User::factory()->create();
+        $group = TrackableGroup::create([
+            'user_id' => $user->id,
+            'name' => 'Transport',
+        ]);
+
+        for ($index = 1; $index <= 13; $index++) {
+            Trackable::create([
+                'user_id' => $user->id,
+                'group_uid' => $group->uid,
+                'name' => 'Transport metric '.$index,
+            ]);
+        }
+
+        $response = $this->actingAs($user)->get(route('dashboard'));
+
+        $response->assertOk();
+        $this->assertSame(12, substr_count($response->getContent(), 'Open records'));
+        $response->assertSee('page=2', false);
+    }
+
+    public function test_groups_can_be_created_updated_and_disabled_from_web_pages(): void
+    {
+        $user = User::factory()->create();
+
+        $createResponse = $this->actingAs($user)->post(route('trackable-groups.store'), [
+            'name' => 'Transport',
+            'description' => 'Fuel, refueling, and flights',
+        ]);
+
+        $group = TrackableGroup::first();
+
+        $createResponse->assertRedirect(route('trackable-groups.index'));
+        $this->assertSame('Transport', $group->name);
+        $this->assertSame('Fuel, refueling, and flights', $group->description);
+        $this->assertSame(0, $group->deleted);
+
+        $updateResponse = $this->actingAs($user)->put(route('trackable-groups.update', $group->uid), [
+            'name' => 'Mobility',
+            'description' => 'Movement and travel',
+        ]);
+
+        $updateResponse->assertRedirect(route('trackable-groups.edit', $group->uid));
+        $this->assertDatabaseHas('trackable_groups', [
+            'uid' => $group->uid,
+            'name' => 'Mobility',
+            'description' => 'Movement and travel',
+        ]);
+
+        $toggleResponse = $this->actingAs($user)->patch(route('trackable-groups.toggle', $group->uid));
+
+        $toggleResponse->assertRedirect(route('trackable-groups.index'));
+        $this->assertDatabaseHas('trackable_groups', [
+            'uid' => $group->uid,
             'deleted' => 1,
         ]);
     }

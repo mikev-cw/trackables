@@ -6,6 +6,7 @@ use App\Http\Resources\TrackableResource;
 use App\Models\Trackable;
 use App\Models\TrackableData;
 use App\Models\TrackableGraph;
+use App\Models\TrackableGroup;
 use App\Models\TrackableRecord;
 use App\Models\TrackableSchema;
 use Carbon\Carbon;
@@ -14,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 
 class TrackableController extends Controller
@@ -24,10 +26,15 @@ class TrackableController extends Controller
         $validated = $request->validate([
             'name' => 'required|max:255',
             'alias' => 'nullable|string|max:255',
+            'group_uid' => [
+                'nullable',
+                Rule::exists('trackable_groups', 'uid')->where(fn ($query) => $query->where('user_id', Auth::id())),
+            ],
         ]);
 
         $t = Trackable::create([
             'user_id' => Auth::id(),
+            'group_uid' => $validated['group_uid'] ?? null,
             'name' => $validated['name'],
             'alias' => Trackable::generateUniqueAlias($validated['name'], $validated['alias'] ?? null),
         ]);
@@ -307,7 +314,9 @@ class TrackableController extends Controller
 
     public function createTrackablePage()
     {
-        return view('trackables.create-trackable');
+        $groups = $this->getTrackableGroupOptions(request());
+
+        return view('trackables.create-trackable', compact('groups'));
     }
 
     public function storeTrackable(Request $request)
@@ -315,10 +324,15 @@ class TrackableController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'alias' => 'nullable|string|max:255',
+            'group_uid' => [
+                'nullable',
+                Rule::exists('trackable_groups', 'uid')->where(fn ($query) => $query->where('user_id', $request->user()->id)),
+            ],
         ]);
 
         $trackable = Trackable::create([
             'user_id' => $request->user()->id,
+            'group_uid' => $validated['group_uid'] ?? null,
             'name' => $validated['name'],
             'alias' => Trackable::generateUniqueAlias($validated['name'], $validated['alias'] ?? null),
             'deleted' => 0,
@@ -331,10 +345,12 @@ class TrackableController extends Controller
 
     public function editTrackablePage(Trackable $trackable)
     {
+        $trackable->load('group');
         $trackable->loadCount('schema');
         $trackable->loadMax('records', 'record_date');
+        $groups = $this->getTrackableGroupOptions(request());
 
-        return view('trackables.edit-trackable', compact('trackable'));
+        return view('trackables.edit-trackable', compact('trackable', 'groups'));
     }
 
     public function updateTrackable(Request $request, Trackable $trackable)
@@ -342,10 +358,15 @@ class TrackableController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'alias' => 'nullable|string|max:255',
+            'group_uid' => [
+                'nullable',
+                Rule::exists('trackable_groups', 'uid')->where(fn ($query) => $query->where('user_id', $request->user()->id)),
+            ],
         ]);
 
         $trackable->update([
             'name' => $validated['name'],
+            'group_uid' => $validated['group_uid'] ?? null,
             'alias' => Trackable::generateUniqueAlias(
                 $validated['name'],
                 $validated['alias'] ?? null,
@@ -581,6 +602,15 @@ class TrackableController extends Controller
                 return [$field->uid => $field->alias ?: $field->name];
             })->all()
         )->validate();
+    }
+
+    private function getTrackableGroupOptions(Request $request)
+    {
+        return TrackableGroup::query()
+            ->where('user_id', $request->user()->id)
+            ->orderBy('deleted')
+            ->orderBy('name')
+            ->get();
     }
 
     private function validateSchemaPayload(Request $request): array

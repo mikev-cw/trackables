@@ -19,6 +19,7 @@ class TrackableFactory extends Factory
         return [
             'name' => fake()->sentence(6),
             'user_id' => 1,
+            'group_uid' => null,
             'deleted' => 0
         ];
     }

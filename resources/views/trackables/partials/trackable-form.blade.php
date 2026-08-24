@@ -37,6 +37,28 @@
                     <div class="invalid-feedback d-block">{{ $message }}</div>
                 @enderror
             </div>
+            <div>
+                <label class="form-label" for="trackable-group">Group</label>
+                <select
+                    class="form-select @error('group_uid') is-invalid @enderror"
+                    id="trackable-group"
+                    name="group_uid"
+                >
+                    <option value="">No group</option>
+                    @foreach (($groups ?? collect()) as $group)
+                        <option
+                            value="{{ $group->uid }}"
+                            @selected(old('group_uid', $trackable->group_uid ?? '') === $group->uid)
+                        >
+                            {{ $group->name }}{{ $group->deleted ? ' (disabled)' : '' }}
+                        </option>
+                    @endforeach
+                </select>
+                <div class="form-hint">Optional dashboard grouping for related trackables.</div>
+                @error('group_uid')
+                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                @enderror
+            </div>
         </div>
         <div class="card-footer">
             <button type="submit" class="btn btn-primary">{{ $submitLabel }}</button>

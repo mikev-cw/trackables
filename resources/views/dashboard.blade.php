@@ -5,13 +5,16 @@
         <a href="{{ route('trackables.create') }}" class="btn btn-primary">
             New trackable
         </a>
+        <a href="{{ route('trackable-groups.index') }}" class="btn btn-outline-primary">
+            Manage groups
+        </a>
         <a href="{{ route('trackables_index') }}" class="btn btn-outline-primary">
             Refresh list
         </a>
     </x-slot>
 
     @isset($list)
-        @if($list->isEmpty())
+        @if($list->isEmpty() && empty($groupsConfigured))
             <div class="card">
                 <div class="card-body text-center py-5">
                     <h3 class="card-title mb-2">No trackables yet</h3>
@@ -21,66 +24,131 @@
                 </div>
             </div>
         @else
-            <div class="row row-cards">
-                @foreach ($list as $trackable)
-                    <div class="col-12 col-md-6 col-xl-4">
-                        <div class="card h-100">
-                            <div class="card-body d-flex flex-column">
-                                <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
-                                    <div>
-                                    <div class="text-uppercase text-secondary fw-bold small mb-1">Trackable</div>
-                                        <h3 class="card-title mb-1">{{ $trackable->name }}</h3>
-                                        <div class="text-secondary small">
-                                            UID: <span class="font-monospace">{{ $trackable->uid }}</span>
-                                        </div>
-                                        <div class="text-secondary small">
-                                            Alias: <span class="font-monospace">{{ $trackable->alias }}</span>
-                                        </div>
-                                    </div>
-                                    <span class="badge {{ $trackable->deleted ? 'bg-red-lt' : 'bg-azure-lt' }}">
-                                        {{ $trackable->deleted ? 'Disabled' : 'Active' }}
-                                    </span>
-                                </div>
+            @if(empty($groupsConfigured))
+                <div class="row row-cards">
+                    @foreach ($list as $trackable)
+                        <div class="col-12 col-md-6 col-xl-4">
+                            @include('trackables.partials.dashboard-card', ['trackable' => $trackable])
+                        </div>
+                    @endforeach
+                </div>
 
-                                <div class="d-flex flex-column gap-2 text-secondary small mb-3">
-                                    <div>Created {{ optional($trackable->created_at)->format('d M Y, H:i') }}</div>
-                                    <div>Schema fields: {{ $trackable->schema_count }}</div>
-                                    <div>
-                                        Last record:
-                                        {{ $trackable->records_max_record_date ? \Illuminate\Support\Carbon::parse($trackable->records_max_record_date)->format('d M Y, H:i') : 'No records yet' }}
-                                    </div>
-                                </div>
+                <div class="mt-4">
+                    {{ $list->links() }}
+                </div>
+            @else
+                <style>
+                    .dashboard-group-bar {
+                        text-align: left;
+                    }
 
-                                <div class="mt-auto d-flex flex-wrap gap-2 align-items-stretch">
-                                    <a href="{{ route('trackables.show', $trackable) }}" class="btn btn-primary btn-sm flex-fill">
-                                        Open records
-                                    </a>
-                                    <a href="{{ route('trackables.statistics', $trackable) }}" class="btn btn-outline-primary btn-sm flex-fill">
-                                        Open statistics
-                                    </a>
-                                    <a href="{{ route('trackables.edit', $trackable) }}" class="btn btn-outline-secondary btn-sm flex-fill">
-                                        Edit trackable
-                                    </a>
-                                    <a href="{{ route('trackables.schema.edit', $trackable) }}" class="btn btn-outline-secondary btn-sm flex-fill">
-                                        Edit schema
-                                    </a>
-                                    <form method="POST" action="{{ route('trackables.toggle', $trackable) }}" class="flex-fill">
-                                        @csrf
-                                        @method('PATCH')
-                                        <button type="submit" class="btn btn-sm {{ $trackable->deleted ? 'btn-success' : 'btn-outline-danger' }} w-100">
-                                            {{ $trackable->deleted ? 'Enable trackable' : 'Disable trackable' }}
-                                        </button>
-                                    </form>
-                                </div>
+                    .dashboard-group-arrow {
+                        transition: transform .2s ease;
+                    }
+
+                    .dashboard-group-bar[aria-expanded="true"] .dashboard-group-arrow {
+                        transform: rotate(180deg);
+                    }
+                </style>
+                <div class="d-flex flex-column gap-4">
+                    @if($dashboardSections->isEmpty())
+                        <div class="card">
+                            <div class="card-body text-center py-5">
+                                <h3 class="card-title mb-2">No trackables yet</h3>
+                                <p class="text-secondary mb-0">
+                                    Create a trackable and assign it to a group to start organizing the dashboard.
+                                </p>
                             </div>
                         </div>
-                    </div>
-                @endforeach
-            </div>
+                    @endif
 
-            <div class="mt-4">
-                {{ $list->links() }}
-            </div>
+                    @foreach ($dashboardSections as $section)
+                        @php($group = $section['group'])
+                        @php($groupTrackables = $section['trackables'])
+                        @php($sectionKey = $section['key'])
+                        <section>
+                            <button
+                                class="dashboard-group-bar btn btn-outline-secondary w-100 d-flex align-items-center justify-content-between gap-3 mb-3 p-3"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#dashboard-group-{{ $sectionKey }}"
+                                data-dashboard-group-key="{{ $sectionKey === 'ungrouped' ? 'ungrouped' : 'group-'.$sectionKey }}"
+                                aria-expanded="true"
+                                aria-controls="dashboard-group-{{ $sectionKey }}"
+                            >
+                                <span>
+                                    <span class="h3 d-block mb-1">{{ $group?->name ?? 'Ungrouped' }}</span>
+                                    @if($group?->description)
+                                        <span class="text-secondary d-block">{{ $group->description }}</span>
+                                    @endif
+                                </span>
+                                <span class="d-flex align-items-center gap-2">
+                                    <span class="badge {{ $group ? 'bg-blue-lt' : 'bg-secondary-lt' }}">{{ $groupTrackables->count() }} shown</span>
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        width="24"
+                                        height="24"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        class="dashboard-group-arrow icon icon-2"
+                                        aria-hidden="true"
+                                    >
+                                        <path d="M6 9l6 6l6 -6" />
+                                    </svg>
+                                </span>
+                            </button>
+                            <div class="collapse show" id="dashboard-group-{{ $sectionKey }}">
+                                <div class="row row-cards">
+                                    @foreach ($groupTrackables as $trackable)
+                                        <div class="col-12 col-md-6 col-xl-4">
+                                            @include('trackables.partials.dashboard-card', ['trackable' => $trackable])
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </div>
+                        </section>
+                    @endforeach
+
+                    <div>
+                        {{ $list->links() }}
+                    </div>
+                </div>
+                <script>
+                    document.addEventListener('DOMContentLoaded', function () {
+                        var storagePrefix = 'trackables.dashboard.group.';
+
+                        document.querySelectorAll('[data-dashboard-group-key]').forEach(function (bar) {
+                            var targetSelector = bar.getAttribute('data-bs-target');
+                            var target = document.querySelector(targetSelector);
+                            var storageKey = storagePrefix + bar.getAttribute('data-dashboard-group-key');
+
+                            if (!target) {
+                                return;
+                            }
+
+                            if (localStorage.getItem(storageKey) === 'closed') {
+                                target.classList.remove('show');
+                                bar.classList.add('collapsed');
+                                bar.setAttribute('aria-expanded', 'false');
+                            }
+
+                            target.addEventListener('shown.bs.collapse', function () {
+                                localStorage.setItem(storageKey, 'open');
+                                bar.setAttribute('aria-expanded', 'true');
+                            });
+
+                            target.addEventListener('hidden.bs.collapse', function () {
+                                localStorage.setItem(storageKey, 'closed');
+                                bar.setAttribute('aria-expanded', 'false');
+                            });
+                        });
+                    });
+                </script>
+            @endif
         @endif
     @endisset
 
