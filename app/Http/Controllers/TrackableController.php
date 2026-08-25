@@ -10,11 +10,11 @@ use App\Models\TrackableGroup;
 use App\Models\TrackableRecord;
 use App\Models\TrackableSchema;
 use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 
@@ -853,12 +853,15 @@ class TrackableController extends Controller
         $bucketSize = $graph->bucket_size ?? ($graph->sampling === 'daily_latest' ? 'day' : 'raw');
         $aggregate = $graph->aggregate ?? 'latest';
 
-        $records = $trackable->records()
-            ->with(['data' => function ($query) use ($graph) {
-                $query->whereIn('trackable_schema_uid', $graph->schema_uids ?? []);
-            }])
+        $records = DB::table('trackable_records as records')
+            ->leftJoin('trackable_data as data', function ($join) use ($graph) {
+                $join
+                    ->on('data.trackable_record_uid', '=', 'records.uid')
+                    ->whereIn('data.trackable_schema_uid', $graph->schema_uids ?? []);
+            })
+            ->where('records.trackable_uid', $trackable->uid)
             ->when($this->getGraphRangeStart($graph->range_type), function ($query, $startDate) {
-                $query->where('record_date', '>=', $startDate);
+                $query->where('records.record_date', '>=', $startDate);
             })
             ->when(!empty($graph->filters), function ($query) use ($schemaByUid, $graph) {
                 foreach ($graph->filters as $schemaUid => $value) {
@@ -866,14 +869,24 @@ class TrackableController extends Controller
                     $operator = $this->usesExactSchemaFilter($field?->field_type) ? '=' : 'like';
                     $comparisonValue = $operator === '=' ? $value : '%'.$value.'%';
 
-                    $query->whereHas('data', function ($dataQuery) use ($schemaUid, $operator, $comparisonValue) {
+                    $query->whereExists(function ($dataQuery) use ($schemaUid, $operator, $comparisonValue) {
                         $dataQuery
-                            ->where('trackable_schema_uid', $schemaUid)
-                            ->where('value', $operator, $comparisonValue);
+                            ->selectRaw('1')
+                            ->from('trackable_data as filter_data')
+                            ->whereColumn('filter_data.trackable_record_uid', 'records.uid')
+                            ->where('filter_data.trackable_schema_uid', $schemaUid)
+                            ->where('filter_data.value', $operator, $comparisonValue);
                     });
                 }
             })
-            ->orderBy('record_date')
+            ->select([
+                'records.uid',
+                'records.record_date',
+                'data.trackable_schema_uid',
+                'data.value',
+            ])
+            ->orderBy('records.record_date')
+            ->orderBy('records.uid')
             ->get();
 
         [$labels, $datasets] = $bucketSize === 'raw'
@@ -910,7 +923,8 @@ class TrackableController extends Controller
 
     private function buildRawGraphSeries(Collection $records, TrackableGraph $graph, Collection $schemaByUid): array
     {
-        $labels = $records->map(fn ($record) => Carbon::parse($record->record_date)->format('Y-m-d H:i'))->values();
+        $recordsByUid = $records->groupBy('uid');
+        $labels = $recordsByUid->map(fn ($recordRows) => Carbon::parse($recordRows->first()->record_date)->format('Y-m-d H:i'))->values();
         $datasets = [];
 
         foreach ($graph->schema_uids as $schemaUid) {
@@ -922,8 +936,8 @@ class TrackableController extends Controller
 
             $datasets[] = [
                 'label' => $field->name,
-                'data' => $records->map(function ($record) use ($schemaUid, $field) {
-                    $dataRow = $record->data->firstWhere('trackable_schema_uid', $schemaUid);
+                'data' => $recordsByUid->map(function ($recordRows) use ($schemaUid, $field) {
+                    $dataRow = $recordRows->firstWhere('trackable_schema_uid', $schemaUid);
 
                     if (!$dataRow) {
                         return null;
@@ -940,7 +954,8 @@ class TrackableController extends Controller
     private function buildBucketedGraphSeries(Collection $records, TrackableGraph $graph, Collection $schemaByUid, string $bucketSize, string $aggregate): array
     {
         $bucketedRecords = $records
-            ->groupBy(fn ($record) => $this->getBucketKey(Carbon::parse($record->record_date), $bucketSize));
+            ->groupBy('uid')
+            ->groupBy(fn ($recordRows) => $this->getBucketKey(Carbon::parse($recordRows->first()->record_date), $bucketSize));
 
         $labels = $bucketedRecords->keys()->values();
         $datasets = [];
@@ -956,15 +971,15 @@ class TrackableController extends Controller
                 'label' => $field->name,
                 'data' => $bucketedRecords->map(function ($bucketRecords) use ($schemaUid, $field, $aggregate) {
                     $points = $bucketRecords
-                        ->map(function ($record) use ($schemaUid, $field) {
-                            $dataRow = $record->data->firstWhere('trackable_schema_uid', $schemaUid);
+                        ->map(function ($recordRows) use ($schemaUid, $field) {
+                            $dataRow = $recordRows->firstWhere('trackable_schema_uid', $schemaUid);
 
                             if (!$dataRow) {
                                 return null;
                             }
 
                             return [
-                                'record_date' => Carbon::parse($record->record_date),
+                                'record_date' => Carbon::parse($recordRows->first()->record_date),
                                 'value' => $field->field_type === 'bool' ? (int) $dataRow->value : (float) $dataRow->value,
                             ];
                         })
