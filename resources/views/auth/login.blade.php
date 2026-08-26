@@ -56,8 +56,9 @@
         const password = document.getElementById('password').value;
 
         try {
-            const res = await fetch('{{ route('login.post') }}', {
+            const res = await fetch('{{ route('login.post', absolute: false) }}', {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
