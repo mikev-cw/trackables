@@ -495,7 +495,7 @@ class TrackableController extends Controller
     {
         $validated = $this->validateSchemaPayload($request);
 
-        TrackableSchema::create([
+        $schema = TrackableSchema::create([
             'trackable_uid' => $trackable->uid,
             'name' => $validated['name'],
             'alias' => TrackableSchema::generateUniqueAlias(
@@ -511,6 +511,7 @@ class TrackableController extends Controller
 
         return redirect()
             ->route('trackables.schema.edit', $trackable->uid)
+            ->with('selected_schema_uid', $schema->uid)
             ->with('status', 'Schema field added successfully.');
     }
 
@@ -536,6 +537,7 @@ class TrackableController extends Controller
 
         return redirect()
             ->route('trackables.schema.edit', $trackable->uid)
+            ->with('selected_schema_uid', $schema->uid)
             ->with('status', 'Schema field updated successfully.');
     }
 
