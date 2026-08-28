@@ -1,8 +1,8 @@
 @php
     $selectedSchemaUid = old('_schema_form', session('selected_schema_uid'));
-    $shouldOpenCreateModal = $selectedSchemaUid === 'create';
+    $shouldOpenCreateModal = in_array($selectedSchemaUid, ['create', 'preset'], true);
 
-    if ($selectedSchemaUid === 'create' || !$schemaFields->contains('uid', $selectedSchemaUid)) {
+    if ($shouldOpenCreateModal || !$schemaFields->contains('uid', $selectedSchemaUid)) {
         $selectedSchemaUid = optional($schemaFields->first())->uid;
     }
 
@@ -207,6 +207,32 @@
             box-shadow: 0 24px 70px rgba(15, 23, 42, .22);
         }
 
+        .schema-modal .modal-dialog {
+            max-width: 760px;
+        }
+
+        .schema-preset-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1rem;
+        }
+
+        .schema-preset-card {
+            border: 1px solid var(--tblr-border-color);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            height: 100%;
+            padding: 1rem;
+        }
+
+        .schema-preset-fields {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .4rem;
+        }
+
         @keyframes schemaPaneIn {
             from {
                 opacity: 0;
@@ -239,6 +265,10 @@
             }
 
             .schema-validation-controls {
+                grid-template-columns: 1fr;
+            }
+
+            .schema-preset-grid {
                 grid-template-columns: 1fr;
             }
         }
@@ -467,119 +497,165 @@
 
     <div class="modal modal-blur fade schema-modal" id="addFieldModal" tabindex="-1" aria-labelledby="addFieldModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
-            <form class="modal-content" method="POST" action="{{ route('trackables.schema.store', $trackable->uid) }}">
-                @csrf
-                <input type="hidden" name="_schema_form" value="create">
-
+            <div class="modal-content">
                 <div class="modal-header">
                     <div>
                         <div class="modal-title h2" id="addFieldModalLabel">Add field</div>
-                        <div class="text-secondary small">Define one more value that {{ $trackable->name }} can record.</div>
+                        <div class="text-secondary small">Create one field manually, or insert a Trackables preset.</div>
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="row g-3">
-                        <div class="col-12 col-md-6">
-                            <label class="form-label">Name</label>
-                            <input class="form-control @error('name') {{ $shouldOpenCreateModal ? 'is-invalid' : '' }} @enderror" name="name" type="text" value="{{ $shouldOpenCreateModal ? old('name') : '' }}" autofocus>
-                            @if($shouldOpenCreateModal)
-                                @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            @endif
-                        </div>
-                        <div class="col-12 col-md-6">
-                            <label class="form-label">Alias</label>
-                            <input class="form-control @error('alias') {{ $shouldOpenCreateModal ? 'is-invalid' : '' }} @enderror" name="alias" type="text" value="{{ $shouldOpenCreateModal ? old('alias') : '' }}" placeholder="pump_name">
-                            @if($shouldOpenCreateModal)
-                                @error('alias')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            @endif
-                        </div>
-                        <div class="col-12 col-md-6">
-                            <label class="form-label">Field type</label>
-                            <select class="form-select @error('field_type') {{ $shouldOpenCreateModal ? 'is-invalid' : '' }} @enderror" name="field_type" data-validation-field-type>
-                                @foreach($fieldTypeOptions as $fieldType)
-                                    <option value="{{ $fieldType }}" @selected(old('field_type', 'string') === $fieldType)>{{ $fieldType }}</option>
-                                @endforeach
-                            </select>
-                            @if($shouldOpenCreateModal)
-                                @error('field_type')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            @endif
-                        </div>
-                        <div class="col-12 col-md-6">
-                            <label class="form-label">Enum UID</label>
-                            <input class="form-control @error('enum_uid') {{ $shouldOpenCreateModal ? 'is-invalid' : '' }} @enderror" name="enum_uid" type="text" value="{{ $shouldOpenCreateModal ? old('enum_uid') : '' }}">
-                            @if($shouldOpenCreateModal)
-                                @error('enum_uid')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            @endif
-                        </div>
-                        <div class="col-12">
-                            <div class="schema-validation-builder" data-validation-builder>
-                                <div class="d-flex flex-column flex-md-row gap-2 justify-content-between mb-3">
-                                    <div>
-                                        <label class="form-label mb-1">Validation</label>
-                                        <div class="text-secondary small">Choose the constraints people should understand at a glance.</div>
-                                    </div>
-                                    <label class="form-check form-switch mb-0">
-                                        <input type="hidden" name="validation_config[required]" value="0">
-                                        <input class="form-check-input" type="checkbox" name="validation_config[required]" value="1" data-validation-input @checked($createValidationConfig['required'])>
-                                        <span class="form-check-label">Required</span>
-                                    </label>
-                                </div>
-                                <div class="schema-validation-controls">
-                                    <div data-validation-control="number">
-                                        <label class="form-label">Minimum value</label>
-                                        <input class="form-control @error('validation_config.min') {{ $shouldOpenCreateModal ? 'is-invalid' : '' }} @enderror" name="validation_config[min]" type="number" step="any" value="{{ $createValidationConfig['min'] }}" data-validation-input>
-                                        @if($shouldOpenCreateModal)
-                                            @error('validation_config.min')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    <ul class="nav nav-tabs mb-3" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link {{ old('_schema_form') === 'preset' ? '' : 'active' }}" id="schema-single-tab" data-bs-toggle="tab" data-bs-target="#schemaSinglePane" type="button" role="tab" aria-controls="schemaSinglePane" aria-selected="{{ old('_schema_form') === 'preset' ? 'false' : 'true' }}">Single field</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link {{ old('_schema_form') === 'preset' ? 'active' : '' }}" id="schema-presets-tab" data-bs-toggle="tab" data-bs-target="#schemaPresetsPane" type="button" role="tab" aria-controls="schemaPresetsPane" aria-selected="{{ old('_schema_form') === 'preset' ? 'true' : 'false' }}">Presets</button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content">
+                        <div class="tab-pane fade {{ old('_schema_form') === 'preset' ? '' : 'show active' }}" id="schemaSinglePane" role="tabpanel" aria-labelledby="schema-single-tab" tabindex="0">
+                            <form id="singleFieldForm" method="POST" action="{{ route('trackables.schema.store', $trackable->uid) }}">
+                                @csrf
+                                <input type="hidden" name="_schema_form" value="create">
+
+                                <div class="row g-3">
+                                    <div class="col-12 col-md-6">
+                                        <label class="form-label">Name</label>
+                                        <input class="form-control @error('name') {{ old('_schema_form') === 'create' ? 'is-invalid' : '' }} @enderror" name="name" type="text" value="{{ old('_schema_form') === 'create' ? old('name') : '' }}" autofocus>
+                                        @if(old('_schema_form') === 'create')
+                                            @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                                         @endif
                                     </div>
-                                    <div data-validation-control="number">
-                                        <label class="form-label">Maximum value</label>
-                                        <input class="form-control @error('validation_config.max') {{ $shouldOpenCreateModal ? 'is-invalid' : '' }} @enderror" name="validation_config[max]" type="number" step="any" value="{{ $createValidationConfig['max'] }}" data-validation-input>
-                                        @if($shouldOpenCreateModal)
-                                            @error('validation_config.max')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                    <div class="col-12 col-md-6">
+                                        <label class="form-label">Alias</label>
+                                        <input class="form-control @error('alias') {{ old('_schema_form') === 'create' ? 'is-invalid' : '' }} @enderror" name="alias" type="text" value="{{ old('_schema_form') === 'create' ? old('alias') : '' }}" placeholder="pump_name">
+                                        @if(old('_schema_form') === 'create')
+                                            @error('alias')<div class="invalid-feedback">{{ $message }}</div>@enderror
                                         @endif
                                     </div>
-                                    <div data-validation-control="length">
-                                        <label class="form-label">Max length</label>
-                                        <input class="form-control @error('validation_config.max_length') {{ $shouldOpenCreateModal ? 'is-invalid' : '' }} @enderror" name="validation_config[max_length]" type="number" min="1" step="1" value="{{ $createValidationConfig['max_length'] }}" data-validation-input>
-                                        @if($shouldOpenCreateModal)
-                                            @error('validation_config.max_length')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                                        @endif
-                                    </div>
-                                    <div data-validation-control="format">
-                                        <label class="form-label">Format</label>
-                                        <select class="form-select @error('validation_config.format') {{ $shouldOpenCreateModal ? 'is-invalid' : '' }} @enderror" name="validation_config[format]" data-validation-input>
-                                            <option value="" @selected(!$createValidationConfig['format'])>Any text</option>
-                                            <option value="email" @selected($createValidationConfig['format'] === 'email')>Email</option>
-                                            <option value="url" @selected($createValidationConfig['format'] === 'url')>URL</option>
-                                            <option value="uuid" @selected($createValidationConfig['format'] === 'uuid')>UUID</option>
+                                    <div class="col-12 col-md-6">
+                                        <label class="form-label">Field type</label>
+                                        <select class="form-select @error('field_type') {{ old('_schema_form') === 'create' ? 'is-invalid' : '' }} @enderror" name="field_type" data-validation-field-type>
+                                            @foreach($fieldTypeOptions as $fieldType)
+                                                <option value="{{ $fieldType }}" @selected(old('field_type', 'string') === $fieldType)>{{ $fieldType }}</option>
+                                            @endforeach
                                         </select>
-                                        @if($shouldOpenCreateModal)
-                                            @error('validation_config.format')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                        @if(old('_schema_form') === 'create')
+                                            @error('field_type')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                        @endif
+                                    </div>
+                                    <div class="col-12 col-md-6">
+                                        <label class="form-label">Enum UID</label>
+                                        <input class="form-control @error('enum_uid') {{ old('_schema_form') === 'create' ? 'is-invalid' : '' }} @enderror" name="enum_uid" type="text" value="{{ old('_schema_form') === 'create' ? old('enum_uid') : '' }}">
+                                        @if(old('_schema_form') === 'create')
+                                            @error('enum_uid')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                        @endif
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="schema-validation-builder" data-validation-builder>
+                                            <div class="d-flex flex-column flex-md-row gap-2 justify-content-between mb-3">
+                                                <div>
+                                                    <label class="form-label mb-1">Validation</label>
+                                                    <div class="text-secondary small">Choose the constraints people should understand at a glance.</div>
+                                                </div>
+                                                <label class="form-check form-switch mb-0">
+                                                    <input type="hidden" name="validation_config[required]" value="0">
+                                                    <input class="form-check-input" type="checkbox" name="validation_config[required]" value="1" data-validation-input @checked($createValidationConfig['required'])>
+                                                    <span class="form-check-label">Required</span>
+                                                </label>
+                                            </div>
+                                            <div class="schema-validation-controls">
+                                                <div data-validation-control="number">
+                                                    <label class="form-label">Minimum value</label>
+                                                    <input class="form-control @error('validation_config.min') {{ old('_schema_form') === 'create' ? 'is-invalid' : '' }} @enderror" name="validation_config[min]" type="number" step="any" value="{{ $createValidationConfig['min'] }}" data-validation-input>
+                                                    @if(old('_schema_form') === 'create')
+                                                        @error('validation_config.min')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                                    @endif
+                                                </div>
+                                                <div data-validation-control="number">
+                                                    <label class="form-label">Maximum value</label>
+                                                    <input class="form-control @error('validation_config.max') {{ old('_schema_form') === 'create' ? 'is-invalid' : '' }} @enderror" name="validation_config[max]" type="number" step="any" value="{{ $createValidationConfig['max'] }}" data-validation-input>
+                                                    @if(old('_schema_form') === 'create')
+                                                        @error('validation_config.max')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                                    @endif
+                                                </div>
+                                                <div data-validation-control="length">
+                                                    <label class="form-label">Max length</label>
+                                                    <input class="form-control @error('validation_config.max_length') {{ old('_schema_form') === 'create' ? 'is-invalid' : '' }} @enderror" name="validation_config[max_length]" type="number" min="1" step="1" value="{{ $createValidationConfig['max_length'] }}" data-validation-input>
+                                                    @if(old('_schema_form') === 'create')
+                                                        @error('validation_config.max_length')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                                    @endif
+                                                </div>
+                                                <div data-validation-control="format">
+                                                    <label class="form-label">Format</label>
+                                                    <select class="form-select @error('validation_config.format') {{ old('_schema_form') === 'create' ? 'is-invalid' : '' }} @enderror" name="validation_config[format]" data-validation-input>
+                                                        <option value="" @selected(!$createValidationConfig['format'])>Any text</option>
+                                                        <option value="email" @selected($createValidationConfig['format'] === 'email')>Email</option>
+                                                        <option value="url" @selected($createValidationConfig['format'] === 'url')>URL</option>
+                                                        <option value="uuid" @selected($createValidationConfig['format'] === 'uuid')>UUID</option>
+                                                    </select>
+                                                    @if(old('_schema_form') === 'create')
+                                                        @error('validation_config.format')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                                    @endif
+                                                </div>
+                                            </div>
+                                            <div class="schema-validation-preview">
+                                                Generated rule:
+                                                <span class="font-monospace" data-validation-preview>{{ $createValidationPreview }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Calc formula</label>
+                                        <textarea class="form-control @error('calc_formula') {{ old('_schema_form') === 'create' ? 'is-invalid' : '' }} @enderror" name="calc_formula" rows="4">{{ old('_schema_form') === 'create' ? old('calc_formula') : '' }}</textarea>
+                                        @if(old('_schema_form') === 'create')
+                                            @error('calc_formula')<div class="invalid-feedback">{{ $message }}</div>@enderror
                                         @endif
                                     </div>
                                 </div>
-                                <div class="schema-validation-preview">
-                                    Generated rule:
-                                    <span class="font-monospace" data-validation-preview>{{ $createValidationPreview }}</span>
-                                </div>
-                            </div>
+                            </form>
                         </div>
-                        <div class="col-12">
-                            <label class="form-label">Calc formula</label>
-                            <textarea class="form-control @error('calc_formula') {{ $shouldOpenCreateModal ? 'is-invalid' : '' }} @enderror" name="calc_formula" rows="4">{{ $shouldOpenCreateModal ? old('calc_formula') : '' }}</textarea>
-                            @if($shouldOpenCreateModal)
-                                @error('calc_formula')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            @endif
+
+                        <div class="tab-pane fade {{ old('_schema_form') === 'preset' ? 'show active' : '' }}" id="schemaPresetsPane" role="tabpanel" aria-labelledby="schema-presets-tab" tabindex="0">
+                            @error('preset')
+                                <div class="alert alert-danger" role="alert">{{ $message }}</div>
+                            @enderror
+
+                            <div class="schema-preset-grid">
+                                @foreach($schemaPresets as $presetKey => $preset)
+                                    <form class="schema-preset-card" method="POST" action="{{ route('trackables.schema.presets.store', $trackable->uid) }}">
+                                        @csrf
+                                        <input type="hidden" name="_schema_form" value="preset">
+                                        <input type="hidden" name="preset" value="{{ $presetKey }}">
+                                        <div>
+                                            <div class="d-flex align-items-center justify-content-between gap-3 mb-2">
+                                                <h3 class="h3 mb-0">{{ $preset['name'] }}</h3>
+                                                <span class="badge bg-primary-lt text-primary">{{ count($preset['fields']) }} fields</span>
+                                            </div>
+                                            <div class="text-secondary small">{{ $preset['description'] }}</div>
+                                        </div>
+                                        <div class="schema-preset-fields">
+                                            @foreach($preset['fields'] as $presetField)
+                                                <span class="badge bg-secondary-lt text-secondary">{{ $presetField['name'] }}</span>
+                                            @endforeach
+                                        </div>
+                                        <div class="mt-auto">
+                                            <button type="submit" class="btn btn-primary w-100">Add preset</button>
+                                        </div>
+                                    </form>
+                                @endforeach
+                            </div>
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-link link-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Add field</button>
+                    <button type="submit" class="btn btn-primary {{ old('_schema_form') === 'preset' ? 'd-none' : '' }}" form="singleFieldForm" id="singleFieldSubmitButton">Add field</button>
                 </div>
-            </form>
+            </div>
         </div>
     </div>
 
@@ -589,6 +665,7 @@
             const searchInput = document.getElementById('schemaFieldSearch');
             const noMatches = document.getElementById('schemaNoMatches');
             const addFieldModal = document.getElementById('addFieldModal');
+            const singleFieldSubmitButton = document.getElementById('singleFieldSubmitButton');
             const fieldButtons = [...document.querySelectorAll('[data-schema-select]')];
             const panes = [...document.querySelectorAll('[data-schema-pane]')];
             const typeRules = {
@@ -694,6 +771,15 @@
                 });
 
                 updatePreview();
+            });
+
+            document.querySelectorAll('#addFieldModal [data-bs-toggle="tab"]').forEach((tab) => {
+                tab.addEventListener('shown.bs.tab', (event) => {
+                    singleFieldSubmitButton?.classList.toggle(
+                        'd-none',
+                        event.target.dataset.bsTarget !== '#schemaSinglePane'
+                    );
+                });
             });
 
             if (editor?.dataset.selectedSchema) {

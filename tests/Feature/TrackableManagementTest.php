@@ -254,4 +254,71 @@ class TrackableManagementTest extends TestCase
             'format' => null,
         ], $field->validation_config);
     }
+
+    public function test_schema_page_can_add_seeded_schema_presets(): void
+    {
+        $user = User::factory()->create();
+        $trackable = Trackable::create([
+            'user_id' => $user->id,
+            'name' => 'Places',
+        ]);
+
+        $response = $this->actingAs($user)->post(route('trackables.schema.presets.store', $trackable->uid), [
+            '_schema_form' => 'preset',
+            'preset' => 'location_coordinates',
+        ]);
+
+        $response->assertRedirect(route('trackables.schema.edit', $trackable->uid));
+        $this->assertDatabaseHas('trackable_schemas', [
+            'trackable_uid' => $trackable->uid,
+            'name' => 'Latitude',
+            'alias' => 'latitude',
+            'field_type' => 'float',
+        ]);
+        $this->assertDatabaseHas('trackable_schemas', [
+            'trackable_uid' => $trackable->uid,
+            'name' => 'Longitude',
+            'alias' => 'longitude',
+            'field_type' => 'float',
+        ]);
+
+        $latitude = TrackableSchema::where('trackable_uid', $trackable->uid)->where('alias', 'latitude')->first();
+        $longitude = TrackableSchema::where('trackable_uid', $trackable->uid)->where('alias', 'longitude')->first();
+
+        $this->assertSame('nullable|numeric|min:-90|max:90', $latitude->validation_rule);
+        $this->assertSame('nullable|numeric|min:-180|max:180', $longitude->validation_rule);
+    }
+
+    public function test_schema_preset_fails_when_any_preset_alias_already_exists(): void
+    {
+        $user = User::factory()->create();
+        $trackable = Trackable::create([
+            'user_id' => $user->id,
+            'name' => 'Places',
+        ]);
+
+        TrackableSchema::create([
+            'trackable_uid' => $trackable->uid,
+            'name' => 'Existing Latitude',
+            'alias' => 'latitude',
+            'field_type' => 'float',
+            'validation_rule' => 'nullable|numeric',
+        ]);
+
+        $response = $this->actingAs($user)
+            ->from(route('trackables.schema.edit', $trackable->uid))
+            ->post(route('trackables.schema.presets.store', $trackable->uid), [
+                '_schema_form' => 'preset',
+                'preset' => 'location_coordinates',
+            ]);
+
+        $response->assertRedirect(route('trackables.schema.edit', $trackable->uid));
+        $response->assertSessionHasErrors('preset');
+
+        $this->assertDatabaseMissing('trackable_schemas', [
+            'trackable_uid' => $trackable->uid,
+            'alias' => 'longitude',
+        ]);
+        $this->assertSame(1, TrackableSchema::where('trackable_uid', $trackable->uid)->count());
+    }
 }

@@ -10,6 +10,19 @@
         </a>
     </x-slot>
 
+    @if($coordinateFields->has('latitude') && $coordinateFields->has('longitude'))
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+        <style>
+            .record-coordinate-map {
+                border: 1px solid var(--tblr-border-color);
+                border-radius: 8px;
+                height: 138px;
+                margin-bottom: 1rem;
+                overflow: hidden;
+            }
+        </style>
+    @endif
+
     @if (session('status'))
         <div class="alert alert-success" role="alert">
             {{ session('status') }}
@@ -157,6 +170,21 @@
                 </div>
                 <div class="card-body">
                     @forelse($records as $record)
+                        @php
+                            $recordValuesBySchemaUid = $record->data->keyBy('trackable_schema_uid');
+                            $latitudeValue = $coordinateFields->has('latitude')
+                                ? $recordValuesBySchemaUid->get($coordinateFields['latitude']->uid)?->value
+                                : null;
+                            $longitudeValue = $coordinateFields->has('longitude')
+                                ? $recordValuesBySchemaUid->get($coordinateFields['longitude']->uid)?->value
+                                : null;
+                            $hasCoordinates = is_numeric($latitudeValue)
+                                && is_numeric($longitudeValue)
+                                && (float) $latitudeValue >= -90
+                                && (float) $latitudeValue <= 90
+                                && (float) $longitudeValue >= -180
+                                && (float) $longitudeValue <= 180;
+                        @endphp
                         <div class="border rounded p-3 mb-3">
                             <div class="d-flex flex-column flex-md-row justify-content-between gap-2 mb-3">
                                 <div>
@@ -182,6 +210,16 @@
                             @if($record->data->isEmpty())
                                 <div class="text-secondary">No values stored for this record.</div>
                             @else
+                                @if($hasCoordinates)
+                                    <div
+                                        class="record-coordinate-map"
+                                        data-record-map
+                                        data-latitude="{{ (float) $latitudeValue }}"
+                                        data-longitude="{{ (float) $longitudeValue }}"
+                                        aria-label="Map for coordinates {{ $latitudeValue }}, {{ $longitudeValue }}"
+                                    ></div>
+                                @endif
+
                                 <div class="row g-3">
                                     @foreach($record->data->sortBy(function ($field) use ($schemaOrder) {
                                         return $schemaOrder[$field->trackable_schema_uid] ?? PHP_INT_MAX;
@@ -208,5 +246,37 @@
             </div>
         </div>
     </div>
+
+    @if($coordinateFields->has('latitude') && $coordinateFields->has('longitude'))
+        <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script>
+            document.addEventListener('DOMContentLoaded', () => {
+                document.querySelectorAll('[data-record-map]').forEach((element) => {
+                    const latitude = Number.parseFloat(element.dataset.latitude);
+                    const longitude = Number.parseFloat(element.dataset.longitude);
+
+                    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !window.L) {
+                        return;
+                    }
+
+                    const map = L.map(element, {
+                        attributionControl: false,
+                        dragging: false,
+                        scrollWheelZoom: false,
+                        doubleClickZoom: false,
+                        boxZoom: false,
+                        keyboard: false,
+                        zoomControl: false,
+                    }).setView([latitude, longitude], 13);
+
+                    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 19,
+                    }).addTo(map);
+
+                    L.marker([latitude, longitude]).addTo(map);
+                });
+            });
+        </script>
+    @endif
 
 </x-layout>

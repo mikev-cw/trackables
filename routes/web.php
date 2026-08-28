@@ -40,6 +40,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/trackables/{trackable}/schema', [TrackableController::class, 'storeSchemaFromPage'])
         ->can('own', 'trackable')
         ->name('trackables.schema.store');
+    Route::post('/trackables/{trackable}/schema/presets', [TrackableController::class, 'storeSchemaPresetFromPage'])
+        ->can('own', 'trackable')
+        ->name('trackables.schema.presets.store');
     Route::put('/trackables/{trackable}/schema/{schema}', [TrackableController::class, 'updateSchemaFromPage'])
         ->can('own', 'trackable')
         ->name('trackables.schema.update');

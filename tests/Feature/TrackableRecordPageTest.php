@@ -437,6 +437,54 @@ class TrackableRecordPageTest extends TestCase
         $this->assertSame(30, $records->total());
     }
 
+    public function test_show_page_renders_map_when_record_has_latitude_and_longitude(): void
+    {
+        $user = User::factory()->create();
+        $trackable = Trackable::create([
+            'user_id' => $user->id,
+            'name' => 'Places',
+        ]);
+
+        $latitude = TrackableSchema::create([
+            'trackable_uid' => $trackable->uid,
+            'name' => 'Latitude',
+            'alias' => 'latitude',
+            'field_type' => 'float',
+            'validation_rule' => 'nullable|numeric|min:-90|max:90',
+        ]);
+        $longitude = TrackableSchema::create([
+            'trackable_uid' => $trackable->uid,
+            'name' => 'Longitude',
+            'alias' => 'longitude',
+            'field_type' => 'float',
+            'validation_rule' => 'nullable|numeric|min:-180|max:180',
+        ]);
+
+        $record = TrackableRecord::create([
+            'trackable_uid' => $trackable->uid,
+            'record_date' => Carbon::parse('2026-03-02 08:00:00'),
+        ]);
+
+        TrackableData::create([
+            'trackable_record_uid' => $record->uid,
+            'trackable_schema_uid' => $latitude->uid,
+            'value' => '45.4642',
+        ]);
+        TrackableData::create([
+            'trackable_record_uid' => $record->uid,
+            'trackable_schema_uid' => $longitude->uid,
+            'value' => '9.1900',
+        ]);
+
+        $response = $this->actingAs($user)->get(route('trackables.show', $trackable->uid));
+
+        $response->assertOk();
+        $response->assertSee('data-record-map', false);
+        $response->assertSee('data-latitude="45.4642"', false);
+        $response->assertSee('data-longitude="9.19"', false);
+        $response->assertSee('tile.openstreetmap.org', false);
+    }
+
     public function test_statistics_page_is_accessible_and_builds_graph_data(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-03-24 12:00:00'));

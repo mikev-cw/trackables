@@ -299,6 +299,9 @@ class TrackableController extends Controller
             ->withQueryString();
 
         $schemaByUid = $schemaCollection->keyBy('uid');
+        $coordinateFields = $schemaCollection
+            ->filter(fn ($field) => in_array($field->alias, ['latitude', 'longitude'], true))
+            ->keyBy('alias');
         $schemaOrder = $schemaCollection->pluck('uid')->flip();
         $filters = [
             'q' => (string) $request->query('q', ''),
@@ -321,6 +324,7 @@ class TrackableController extends Controller
             'trackable',
             'schema',
             'schemaByUid',
+            'coordinateFields',
             'schemaOrder',
             'records',
             'filters',
@@ -416,6 +420,7 @@ class TrackableController extends Controller
             'trackable' => $trackable,
             'schemaFields' => $trackable->schema,
             'fieldTypeOptions' => ['int', 'float', 'json', 'string', 'bool', 'date', 'datetime', 'img', 'url', 'enum', 'calc'],
+            'schemaPresets' => $this->getSeededSchemaPresets(),
         ]);
     }
 
@@ -531,6 +536,57 @@ class TrackableController extends Controller
             ->route('trackables.schema.edit', $trackable->uid)
             ->with('selected_schema_uid', $schema->uid)
             ->with('status', 'Schema field added successfully.');
+    }
+
+    public function storeSchemaPresetFromPage(Request $request, Trackable $trackable)
+    {
+        $validated = $request->validate([
+            'preset' => ['required', Rule::in(array_keys($this->getSeededSchemaPresets()))],
+        ]);
+
+        $preset = $this->getSeededSchemaPresets()[$validated['preset']];
+        $presetAliases = collect($preset['fields'])->pluck('alias')->filter()->values();
+        $existingAliases = $trackable->schema()
+            ->whereIn('alias', $presetAliases)
+            ->pluck('alias');
+
+        if ($existingAliases->isNotEmpty()) {
+            return back()
+                ->withErrors([
+                    'preset' => 'This preset cannot be added because the schema already has: '.$existingAliases->implode(', ').'.',
+                ])
+                ->withInput(['_schema_form' => 'preset']);
+        }
+
+        $createdSchemas = collect();
+
+        DB::transaction(function () use ($trackable, $preset, $createdSchemas) {
+            foreach ($preset['fields'] as $field) {
+                $validationConfig = TrackableSchema::normalizeValidationConfig(
+                    $field['field_type'],
+                    $field['validation_config'] ?? []
+                );
+
+                $createdSchemas->push(TrackableSchema::create([
+                    'trackable_uid' => $trackable->uid,
+                    'name' => $field['name'],
+                    'alias' => TrackableSchema::generateUniqueAlias(
+                        $trackable->uid,
+                        $field['name'],
+                        $field['alias'] ?? null
+                    ),
+                    'field_type' => $field['field_type'],
+                    'enum_uid' => $field['enum_uid'] ?? null,
+                    'calc_formula' => $field['calc_formula'] ?? null,
+                    'validation_config' => $validationConfig,
+                ]));
+            }
+        });
+
+        return redirect()
+            ->route('trackables.schema.edit', $trackable->uid)
+            ->with('selected_schema_uid', $createdSchemas->first()?->uid)
+            ->with('status', $preset['name'].' preset added successfully.');
     }
 
     public function updateSchemaFromPage(Request $request, Trackable $trackable, TrackableSchema $schema)
@@ -659,6 +715,38 @@ class TrackableController extends Controller
             $validated['field_type'],
             $validated['validation_config'] ?? TrackableSchema::validationConfigFromRule($validated['field_type'], $validated['validation_rule'] ?? null)
         );
+    }
+
+    private function getSeededSchemaPresets(): array
+    {
+        return [
+            'location_coordinates' => [
+                'name' => 'Latitude / Longitude',
+                'description' => 'Adds two decimal coordinate fields for maps, places, and GPS-like records.',
+                'fields' => [
+                    [
+                        'name' => 'Latitude',
+                        'alias' => 'latitude',
+                        'field_type' => 'float',
+                        'validation_config' => [
+                            'required' => false,
+                            'min' => -90,
+                            'max' => 90,
+                        ],
+                    ],
+                    [
+                        'name' => 'Longitude',
+                        'alias' => 'longitude',
+                        'field_type' => 'float',
+                        'validation_config' => [
+                            'required' => false,
+                            'min' => -180,
+                            'max' => 180,
+                        ],
+                    ],
+                ],
+            ],
+        ];
     }
 
     private function getSingleRecordValidationRules(Collection $schema): array
