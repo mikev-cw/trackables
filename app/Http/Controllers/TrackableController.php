@@ -146,8 +146,14 @@ class TrackableController extends Controller
             'field_type' => 'required',
             'enum_uid' => 'nullable',
             'calc_formula' => 'nullable',
-            'validation_rule' => 'required',
+            'validation_rule' => 'nullable|string',
+            'validation_config' => 'nullable|array',
         ]);
+
+        $validationConfig = TrackableSchema::normalizeValidationConfig(
+            $validated['field_type'],
+            $validated['validation_config'] ?? TrackableSchema::validationConfigFromRule($validated['field_type'], $validated['validation_rule'] ?? null)
+        );
 
         return TrackableSchema::create([
             'trackable_uid' => $request->trackable->uid,
@@ -160,7 +166,7 @@ class TrackableController extends Controller
             'field_type' => $validated['field_type'],
             'enum_uid' => $validated['enum_uid'] ?? null,
             'calc_formula' => $validated['calc_formula'] ?? null,
-            'validation_rule' => $validated['validation_rule'],
+            'validation_config' => $validationConfig,
         ]);
 
     }
@@ -179,6 +185,7 @@ class TrackableController extends Controller
             'enum_uid' => 'sometimes|string|max:24',
             'calc_formula' => 'sometimes|',
             'validation_rule' => 'sometimes|',
+            'validation_config' => 'sometimes|array',
         ];
 
         // Validate the incoming request
@@ -198,6 +205,16 @@ class TrackableController extends Controller
                 $payload['alias'] ?? $model->alias,
                 $model->uid
             );
+        }
+
+        if (array_key_exists('field_type', $payload) || array_key_exists('validation_config', $payload) || array_key_exists('validation_rule', $payload)) {
+            $fieldType = $payload['field_type'] ?? $model->field_type;
+            $validationConfig = TrackableSchema::normalizeValidationConfig(
+                $fieldType,
+                $payload['validation_config'] ?? TrackableSchema::validationConfigFromRule($fieldType, $payload['validation_rule'] ?? $model->validation_rule)
+            );
+            $payload['validation_config'] = $validationConfig;
+            unset($payload['validation_rule']);
         }
 
         $model->update($payload);
@@ -494,6 +511,7 @@ class TrackableController extends Controller
     public function storeSchemaFromPage(Request $request, Trackable $trackable)
     {
         $validated = $this->validateSchemaPayload($request);
+        $validationConfig = $this->getSchemaValidationConfig($validated);
 
         $schema = TrackableSchema::create([
             'trackable_uid' => $trackable->uid,
@@ -506,7 +524,7 @@ class TrackableController extends Controller
             'field_type' => $validated['field_type'],
             'enum_uid' => $validated['enum_uid'] ?? null,
             'calc_formula' => $validated['calc_formula'] ?? null,
-            'validation_rule' => $validated['validation_rule'],
+            'validation_config' => $validationConfig,
         ]);
 
         return redirect()
@@ -520,6 +538,7 @@ class TrackableController extends Controller
         abort_unless($schema->trackable_uid === $trackable->uid, 404);
 
         $validated = $this->validateSchemaPayload($request);
+        $validationConfig = $this->getSchemaValidationConfig($validated);
 
         $schema->update([
             'name' => $validated['name'],
@@ -532,7 +551,7 @@ class TrackableController extends Controller
             'field_type' => $validated['field_type'],
             'enum_uid' => $validated['enum_uid'] ?? null,
             'calc_formula' => $validated['calc_formula'] ?? null,
-            'validation_rule' => $validated['validation_rule'],
+            'validation_config' => $validationConfig,
         ]);
 
         return redirect()
@@ -624,8 +643,22 @@ class TrackableController extends Controller
             'field_type' => 'required|string',
             'enum_uid' => 'nullable|string|max:24',
             'calc_formula' => 'nullable',
-            'validation_rule' => 'required|string',
+            'validation_rule' => 'nullable|string',
+            'validation_config' => 'nullable|array',
+            'validation_config.required' => 'nullable|boolean',
+            'validation_config.min' => 'nullable|numeric',
+            'validation_config.max' => 'nullable|numeric',
+            'validation_config.max_length' => 'nullable|integer|min:1',
+            'validation_config.format' => 'nullable|string|in:email,url,uuid',
         ]);
+    }
+
+    private function getSchemaValidationConfig(array $validated): array
+    {
+        return TrackableSchema::normalizeValidationConfig(
+            $validated['field_type'],
+            $validated['validation_config'] ?? TrackableSchema::validationConfigFromRule($validated['field_type'], $validated['validation_rule'] ?? null)
+        );
     }
 
     private function getSingleRecordValidationRules(Collection $schema): array

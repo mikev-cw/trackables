@@ -16,10 +16,18 @@ class TrackableSchemaFactory extends Factory
      */
     public function definition(): array
     {
+        $fieldType = fake()->randomElement(['int', 'float', 'string']);
+
         return [
             'name' => fake()->sentence(2),
-            'field_type' => fake()->randomElement(['int', 'float', 'string']),
-            'validation_rule' => '[]'
+            'field_type' => $fieldType,
+            'validation_config' => [
+                'required' => false,
+                'min' => null,
+                'max' => null,
+                'max_length' => $fieldType === 'string' ? 255 : null,
+                'format' => null,
+            ],
         ];
     }
 }

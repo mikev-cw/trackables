@@ -6,6 +6,12 @@
         $selectedSchemaUid = optional($schemaFields->first())->uid;
     }
 
+    $createValidationConfig = \App\Models\TrackableSchema::normalizeValidationConfig(
+        old('field_type', 'string'),
+        $shouldOpenCreateModal ? old('validation_config', []) : ['max_length' => 255]
+    );
+    $createValidationPreview = \App\Models\TrackableSchema::validationRuleFromConfig(old('field_type', 'string'), $createValidationConfig);
+
     $typeToneMap = [
         'int' => 'blue',
         'float' => 'cyan',
@@ -175,6 +181,27 @@
             grid-column: 1 / -1;
         }
 
+        .schema-validation-builder {
+            border: 1px solid var(--tblr-border-color);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .schema-validation-controls {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 1rem;
+        }
+
+        .schema-validation-preview {
+            background: var(--tblr-bg-surface-secondary);
+            border-radius: 6px;
+            color: var(--tblr-secondary);
+            font-size: .8rem;
+            margin-top: 1rem;
+            padding: .75rem .9rem;
+        }
+
         .schema-modal .modal-content {
             border: 0;
             box-shadow: 0 24px 70px rgba(15, 23, 42, .22);
@@ -208,6 +235,10 @@
 
         @media (max-width: 575.98px) {
             .schema-form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .schema-validation-controls {
                 grid-template-columns: 1fr;
             }
         }
@@ -280,6 +311,13 @@
                     $tone = $typeToneMap[$field->field_type] ?? 'secondary';
                     $isSelected = $selectedSchemaUid === $field->uid;
                     $isErroredField = old('_schema_form') === $field->uid;
+                    $validationConfig = $isErroredField
+                        ? \App\Models\TrackableSchema::normalizeValidationConfig(old('field_type', $field->field_type), old('validation_config', []))
+                        : $field->validationConfigForEditor();
+                    $validationPreview = \App\Models\TrackableSchema::validationRuleFromConfig(
+                        $isErroredField ? old('field_type', $field->field_type) : $field->field_type,
+                        $validationConfig
+                    );
                 @endphp
                 <div class="schema-detail-pane {{ $isSelected ? 'is-active' : '' }}" data-schema-pane="{{ $field->uid }}">
                     <form method="POST" action="{{ route('trackables.schema.update', [$trackable->uid, $field->uid]) }}">
@@ -324,20 +362,13 @@
                                 </div>
                                 <div>
                                     <label class="form-label">Field type</label>
-                                    <select class="form-select @error('field_type') {{ $isErroredField ? 'is-invalid' : '' }} @enderror" name="field_type">
+                                    <select class="form-select @error('field_type') {{ $isErroredField ? 'is-invalid' : '' }} @enderror" name="field_type" data-validation-field-type>
                                         @foreach($fieldTypeOptions as $fieldType)
                                             <option value="{{ $fieldType }}" @selected(($isErroredField ? old('field_type') : $field->field_type) === $fieldType)>{{ $fieldType }}</option>
                                         @endforeach
                                     </select>
                                     @if($isErroredField)
                                         @error('field_type')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                                    @endif
-                                </div>
-                                <div>
-                                    <label class="form-label">Validation rule</label>
-                                    <input class="form-control @error('validation_rule') {{ $isErroredField ? 'is-invalid' : '' }} @enderror" name="validation_rule" type="text" value="{{ $isErroredField ? old('validation_rule') : $field->validation_rule }}" placeholder="nullable|string">
-                                    @if($isErroredField)
-                                        @error('validation_rule')<div class="invalid-feedback">{{ $message }}</div>@enderror
                                     @endif
                                 </div>
                                 <div>
@@ -350,6 +381,60 @@
                                 <div>
                                     <label class="form-label">UID</label>
                                     <div class="form-control-plaintext font-monospace text-secondary">{{ $field->uid }}</div>
+                                </div>
+                                <div class="is-wide">
+                                    <div class="schema-validation-builder" data-validation-builder>
+                                        <div class="d-flex flex-column flex-md-row gap-2 justify-content-between mb-3">
+                                            <div>
+                                                <label class="form-label mb-1">Validation</label>
+                                                <div class="text-secondary small">Use field-friendly options; the app generates the runtime rule.</div>
+                                            </div>
+                                            <label class="form-check form-switch mb-0">
+                                                <input type="hidden" name="validation_config[required]" value="0">
+                                                <input class="form-check-input" type="checkbox" name="validation_config[required]" value="1" data-validation-input @checked($validationConfig['required'])>
+                                                <span class="form-check-label">Required</span>
+                                            </label>
+                                        </div>
+                                        <div class="schema-validation-controls">
+                                            <div data-validation-control="number">
+                                                <label class="form-label">Minimum value</label>
+                                                <input class="form-control @error('validation_config.min') {{ $isErroredField ? 'is-invalid' : '' }} @enderror" name="validation_config[min]" type="number" step="any" value="{{ $validationConfig['min'] }}" data-validation-input>
+                                                @if($isErroredField)
+                                                    @error('validation_config.min')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                                @endif
+                                            </div>
+                                            <div data-validation-control="number">
+                                                <label class="form-label">Maximum value</label>
+                                                <input class="form-control @error('validation_config.max') {{ $isErroredField ? 'is-invalid' : '' }} @enderror" name="validation_config[max]" type="number" step="any" value="{{ $validationConfig['max'] }}" data-validation-input>
+                                                @if($isErroredField)
+                                                    @error('validation_config.max')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                                @endif
+                                            </div>
+                                            <div data-validation-control="length">
+                                                <label class="form-label">Max length</label>
+                                                <input class="form-control @error('validation_config.max_length') {{ $isErroredField ? 'is-invalid' : '' }} @enderror" name="validation_config[max_length]" type="number" min="1" step="1" value="{{ $validationConfig['max_length'] }}" data-validation-input>
+                                                @if($isErroredField)
+                                                    @error('validation_config.max_length')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                                @endif
+                                            </div>
+                                            <div data-validation-control="format">
+                                                <label class="form-label">Format</label>
+                                                <select class="form-select @error('validation_config.format') {{ $isErroredField ? 'is-invalid' : '' }} @enderror" name="validation_config[format]" data-validation-input>
+                                                    <option value="" @selected(!$validationConfig['format'])>Any text</option>
+                                                    <option value="email" @selected($validationConfig['format'] === 'email')>Email</option>
+                                                    <option value="url" @selected($validationConfig['format'] === 'url')>URL</option>
+                                                    <option value="uuid" @selected($validationConfig['format'] === 'uuid')>UUID</option>
+                                                </select>
+                                                @if($isErroredField)
+                                                    @error('validation_config.format')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                                @endif
+                                            </div>
+                                        </div>
+                                        <div class="schema-validation-preview">
+                                            Generated rule:
+                                            <span class="font-monospace" data-validation-preview>{{ $validationPreview }}</span>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div class="is-wide">
                                     <label class="form-label">Calc formula</label>
@@ -411,7 +496,7 @@
                         </div>
                         <div class="col-12 col-md-6">
                             <label class="form-label">Field type</label>
-                            <select class="form-select @error('field_type') {{ $shouldOpenCreateModal ? 'is-invalid' : '' }} @enderror" name="field_type">
+                            <select class="form-select @error('field_type') {{ $shouldOpenCreateModal ? 'is-invalid' : '' }} @enderror" name="field_type" data-validation-field-type>
                                 @foreach($fieldTypeOptions as $fieldType)
                                     <option value="{{ $fieldType }}" @selected(old('field_type', 'string') === $fieldType)>{{ $fieldType }}</option>
                                 @endforeach
@@ -421,18 +506,65 @@
                             @endif
                         </div>
                         <div class="col-12 col-md-6">
-                            <label class="form-label">Validation rule</label>
-                            <input class="form-control @error('validation_rule') {{ $shouldOpenCreateModal ? 'is-invalid' : '' }} @enderror" name="validation_rule" type="text" value="{{ $shouldOpenCreateModal ? old('validation_rule', 'nullable|string') : 'nullable|string' }}">
-                            @if($shouldOpenCreateModal)
-                                @error('validation_rule')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            @endif
-                        </div>
-                        <div class="col-12 col-md-6">
                             <label class="form-label">Enum UID</label>
                             <input class="form-control @error('enum_uid') {{ $shouldOpenCreateModal ? 'is-invalid' : '' }} @enderror" name="enum_uid" type="text" value="{{ $shouldOpenCreateModal ? old('enum_uid') : '' }}">
                             @if($shouldOpenCreateModal)
                                 @error('enum_uid')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             @endif
+                        </div>
+                        <div class="col-12">
+                            <div class="schema-validation-builder" data-validation-builder>
+                                <div class="d-flex flex-column flex-md-row gap-2 justify-content-between mb-3">
+                                    <div>
+                                        <label class="form-label mb-1">Validation</label>
+                                        <div class="text-secondary small">Choose the constraints people should understand at a glance.</div>
+                                    </div>
+                                    <label class="form-check form-switch mb-0">
+                                        <input type="hidden" name="validation_config[required]" value="0">
+                                        <input class="form-check-input" type="checkbox" name="validation_config[required]" value="1" data-validation-input @checked($createValidationConfig['required'])>
+                                        <span class="form-check-label">Required</span>
+                                    </label>
+                                </div>
+                                <div class="schema-validation-controls">
+                                    <div data-validation-control="number">
+                                        <label class="form-label">Minimum value</label>
+                                        <input class="form-control @error('validation_config.min') {{ $shouldOpenCreateModal ? 'is-invalid' : '' }} @enderror" name="validation_config[min]" type="number" step="any" value="{{ $createValidationConfig['min'] }}" data-validation-input>
+                                        @if($shouldOpenCreateModal)
+                                            @error('validation_config.min')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                        @endif
+                                    </div>
+                                    <div data-validation-control="number">
+                                        <label class="form-label">Maximum value</label>
+                                        <input class="form-control @error('validation_config.max') {{ $shouldOpenCreateModal ? 'is-invalid' : '' }} @enderror" name="validation_config[max]" type="number" step="any" value="{{ $createValidationConfig['max'] }}" data-validation-input>
+                                        @if($shouldOpenCreateModal)
+                                            @error('validation_config.max')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                        @endif
+                                    </div>
+                                    <div data-validation-control="length">
+                                        <label class="form-label">Max length</label>
+                                        <input class="form-control @error('validation_config.max_length') {{ $shouldOpenCreateModal ? 'is-invalid' : '' }} @enderror" name="validation_config[max_length]" type="number" min="1" step="1" value="{{ $createValidationConfig['max_length'] }}" data-validation-input>
+                                        @if($shouldOpenCreateModal)
+                                            @error('validation_config.max_length')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                        @endif
+                                    </div>
+                                    <div data-validation-control="format">
+                                        <label class="form-label">Format</label>
+                                        <select class="form-select @error('validation_config.format') {{ $shouldOpenCreateModal ? 'is-invalid' : '' }} @enderror" name="validation_config[format]" data-validation-input>
+                                            <option value="" @selected(!$createValidationConfig['format'])>Any text</option>
+                                            <option value="email" @selected($createValidationConfig['format'] === 'email')>Email</option>
+                                            <option value="url" @selected($createValidationConfig['format'] === 'url')>URL</option>
+                                            <option value="uuid" @selected($createValidationConfig['format'] === 'uuid')>UUID</option>
+                                        </select>
+                                        @if($shouldOpenCreateModal)
+                                            @error('validation_config.format')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                        @endif
+                                    </div>
+                                </div>
+                                <div class="schema-validation-preview">
+                                    Generated rule:
+                                    <span class="font-monospace" data-validation-preview>{{ $createValidationPreview }}</span>
+                                </div>
+                            </div>
                         </div>
                         <div class="col-12">
                             <label class="form-label">Calc formula</label>
@@ -459,6 +591,17 @@
             const addFieldModal = document.getElementById('addFieldModal');
             const fieldButtons = [...document.querySelectorAll('[data-schema-select]')];
             const panes = [...document.querySelectorAll('[data-schema-pane]')];
+            const typeRules = {
+                int: 'integer',
+                float: 'numeric',
+                json: 'json',
+                bool: 'boolean',
+                date: 'date',
+                datetime: 'date',
+                url: 'url',
+            };
+            const numberTypes = ['int', 'float'];
+            const lengthTypes = ['string', 'url', 'img', 'json'];
 
             const selectField = (uid) => {
                 fieldButtons.forEach((button) => {
@@ -485,6 +628,72 @@
                 });
 
                 noMatches?.classList.toggle('d-none', visibleCount !== 0);
+            });
+
+            document.querySelectorAll('form').forEach((form) => {
+                const fieldTypeInput = form.querySelector('[data-validation-field-type]');
+                const builder = form.querySelector('[data-validation-builder]');
+
+                if (!fieldTypeInput || !builder) {
+                    return;
+                }
+
+                const preview = builder.querySelector('[data-validation-preview]');
+                const requiredInput = builder.querySelector('input[name="validation_config[required]"][type="checkbox"]');
+                const minInput = builder.querySelector('input[name="validation_config[min]"]');
+                const maxInput = builder.querySelector('input[name="validation_config[max]"]');
+                const maxLengthInput = builder.querySelector('input[name="validation_config[max_length]"]');
+                const formatInput = builder.querySelector('select[name="validation_config[format]"]');
+                const controls = [...builder.querySelectorAll('[data-validation-control]')];
+
+                const setControlVisibility = (name, isVisible) => {
+                    controls
+                        .filter((control) => control.dataset.validationControl === name)
+                        .forEach((control) => {
+                            control.classList.toggle('d-none', !isVisible);
+                        });
+                };
+
+                const updatePreview = () => {
+                    const fieldType = fieldTypeInput.value || 'string';
+                    const rules = [requiredInput?.checked ? 'required' : 'nullable'];
+                    const usesNumber = numberTypes.includes(fieldType);
+                    const usesLength = lengthTypes.includes(fieldType);
+                    const usesFormat = fieldType === 'string';
+
+                    setControlVisibility('number', usesNumber);
+                    setControlVisibility('length', usesLength);
+                    setControlVisibility('format', usesFormat);
+
+                    rules.push(typeRules[fieldType] || 'string');
+
+                    if (usesNumber && minInput?.value !== '') {
+                        rules.push(`min:${minInput.value}`);
+                    }
+
+                    if (usesNumber && maxInput?.value !== '') {
+                        rules.push(`max:${maxInput.value}`);
+                    }
+
+                    if (usesLength && maxLengthInput?.value !== '') {
+                        rules.push(`max:${maxLengthInput.value}`);
+                    }
+
+                    if (usesFormat && formatInput?.value) {
+                        rules.push(formatInput.value);
+                    }
+
+                    if (preview) {
+                        preview.textContent = [...new Set(rules)].join('|');
+                    }
+                };
+
+                form.querySelectorAll('[data-validation-input], [data-validation-field-type]').forEach((input) => {
+                    input.addEventListener('input', updatePreview);
+                    input.addEventListener('change', updatePreview);
+                });
+
+                updatePreview();
             });
 
             if (editor?.dataset.selectedSchema) {

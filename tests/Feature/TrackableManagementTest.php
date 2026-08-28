@@ -218,7 +218,40 @@ class TrackableManagementTest extends TestCase
             'uid' => $field->uid,
             'name' => 'Pump Label',
             'alias' => 'pump_label',
-            'validation_rule' => 'nullable|string|max:255',
         ]);
+        $this->assertSame('nullable|string|max:255', $field->fresh()->validation_rule);
+    }
+
+    public function test_schema_page_generates_validation_rules_from_structured_config(): void
+    {
+        $user = User::factory()->create();
+        $trackable = Trackable::create([
+            'user_id' => $user->id,
+            'name' => 'Fuel prices',
+        ]);
+
+        $createResponse = $this->actingAs($user)->post(route('trackables.schema.store', $trackable->uid), [
+            'name' => 'Liters',
+            'field_type' => 'float',
+            'validation_config' => [
+                'required' => '1',
+                'min' => '0',
+                'max' => '200',
+            ],
+        ]);
+
+        $field = TrackableSchema::first();
+
+        $createResponse->assertRedirect(route('trackables.schema.edit', $trackable->uid));
+        $field = $field->fresh();
+
+        $this->assertSame('required|numeric|min:0|max:200', $field->validation_rule);
+        $this->assertSame([
+            'required' => true,
+            'min' => 0,
+            'max' => 200,
+            'max_length' => null,
+            'format' => null,
+        ], $field->validation_config);
     }
 }

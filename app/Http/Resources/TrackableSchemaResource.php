@@ -20,6 +20,7 @@ class TrackableSchemaResource extends JsonResource
             'alias' => $this->alias,
             'field_type' => $this->field_type,
             'validation_rule' => $this->validation_rule,
+            'validation_config' => $this->validationConfigForEditor(),
         ];
     }
 }
