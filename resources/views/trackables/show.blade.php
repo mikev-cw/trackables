@@ -130,18 +130,29 @@
                                         @endif
                                     </div>
 
-                                    <input
-                                        class="form-control"
-                                        type="{{ in_array($field->field_type, ['int', 'float']) ? 'number' : (in_array($field->field_type, ['date', 'datetime']) ? ($field->field_type === 'date' ? 'date' : 'datetime-local') : 'text') }}"
-                                        @if($field->field_type === 'float') step="any" @endif
-                                        id="schema-filter-{{ $field->uid }}"
-                                        name="schema[{{ $field->uid }}]"
-                                        value="{{ $filters['schema'][$field->uid] ?? '' }}"
-                                        placeholder="{{ in_array($field->field_type, ['int', 'float', 'bool', 'date', 'datetime']) ? 'Exact value' : 'Contains value' }}"
-                                    >
+                                    @if($field->field_type === 'enum')
+                                        <select class="form-select" id="schema-filter-{{ $field->uid }}" name="schema[{{ $field->uid }}]">
+                                            <option value="">Any value</option>
+                                            @foreach($field->enum?->values ?? collect() as $enumValue)
+                                                <option value="{{ $enumValue->uid }}" @selected(($filters['schema'][$field->uid] ?? '') === $enumValue->uid)>
+                                                    {{ $enumValue->display_label }}{{ $enumValue->is_active ? '' : ' (retired)' }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    @else
+                                        <input
+                                            class="form-control"
+                                            type="{{ in_array($field->field_type, ['int', 'float']) ? 'number' : (in_array($field->field_type, ['date', 'datetime']) ? ($field->field_type === 'date' ? 'date' : 'datetime-local') : 'text') }}"
+                                            @if($field->field_type === 'float') step="any" @endif
+                                            id="schema-filter-{{ $field->uid }}"
+                                            name="schema[{{ $field->uid }}]"
+                                            value="{{ $filters['schema'][$field->uid] ?? '' }}"
+                                            placeholder="{{ in_array($field->field_type, ['int', 'float', 'bool', 'date', 'datetime']) ? 'Exact value' : 'Contains value' }}"
+                                        >
+                                    @endif
 
                                     <div class="text-secondary small mt-2">
-                                        {{ in_array($field->field_type, ['int', 'float', 'bool', 'date', 'datetime']) ? 'Exact match' : 'Partial match' }}
+                                        {{ in_array($field->field_type, ['int', 'float', 'bool', 'date', 'datetime', 'enum']) ? 'Exact match' : 'Partial match' }}
                                         · {{ $field->uid }}
                                     </div>
                                 </div>
@@ -224,11 +235,22 @@
                                     @foreach($record->data->sortBy(function ($field) use ($schemaOrder) {
                                         return $schemaOrder[$field->trackable_schema_uid] ?? PHP_INT_MAX;
                                     }) as $field)
+                                        @php
+                                            $schemaField = $schemaByUid[$field->trackable_schema_uid] ?? null;
+                                            $enumValue = $schemaField?->field_type === 'enum'
+                                                ? $schemaField->enum?->values->firstWhere('uid', $field->value)
+                                                : null;
+                                        @endphp
                                         <div class="col-12 col-md-6">
                                             <div class="text-secondary small">
-                                                {{ $schemaByUid[$field->trackable_schema_uid]->name ?? $field->trackable_schema_uid }}
+                                                {{ $schemaField->name ?? $field->trackable_schema_uid }}
                                             </div>
-                                            <div>{{ $field->value }}</div>
+                                            <div>
+                                                {{ $enumValue?->display_label ?? $field->value }}
+                                                @if($enumValue && !$enumValue->is_active)
+                                                    <span class="badge bg-secondary-lt text-secondary ms-1">Retired</span>
+                                                @endif
+                                            </div>
                                         </div>
                                     @endforeach
                                 </div>

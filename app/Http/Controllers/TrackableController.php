@@ -5,18 +5,20 @@ namespace App\Http\Controllers;
 use App\Http\Resources\TrackableResource;
 use App\Models\Trackable;
 use App\Models\TrackableData;
+use App\Models\TrackableEnum;
 use App\Models\TrackableGraph;
 use App\Models\TrackableGroup;
 use App\Models\TrackableRecord;
 use App\Models\TrackableSchema;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Collection;
-use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class TrackableController extends Controller
 {
@@ -45,9 +47,9 @@ class TrackableController extends Controller
 
     public function list(Request $request)
     {
-        return TrackableResource::collection(Trackable::with('schema')
-            ->where('deleted',0)
-            ->where('user_id',$request->user()->id)
+        return TrackableResource::collection(Trackable::with('schema.enum.values')
+            ->where('deleted', 0)
+            ->where('user_id', $request->user()->id)
             ->orderByDesc('created_at')
             ->paginate(10));
     }
@@ -67,9 +69,9 @@ class TrackableController extends Controller
         ]);
     }
 
-    public function storeBulkRecords(Request $request): \Illuminate\Http\JsonResponse
+    public function storeBulkRecords(Request $request): JsonResponse
     {
-        $schema = $request->trackable->schema;
+        $schema = $request->trackable->schema()->with('enum.values')->get();
         $rawItems = $request->has('records') ? $request->input('records', []) : [$request->all()];
         $items = collect($rawItems)
             ->map(fn ($record) => $this->normalizeApiRecordPayload($record, $request->trackable))
@@ -99,7 +101,7 @@ class TrackableController extends Controller
             })->all())->validate();
         }
 
-        $recordsCreated =[];
+        $recordsCreated = [];
 
         DB::transaction(function () use (&$request, &$items, &$recordsCreated) {
             foreach ($items as $recordItem) {
@@ -123,7 +125,7 @@ class TrackableController extends Controller
                 }
 
                 // Bulk save using saveMany() to trigger Eloquent events
-                if (!empty($trackableDataInstances)) {
+                if (! empty($trackableDataInstances)) {
                     $record->data()->saveMany($trackableDataInstances);
                 }
             }
@@ -143,8 +145,12 @@ class TrackableController extends Controller
         $validated = $request->validate([
             'name' => 'required|max:80',
             'alias' => 'nullable|string|max:80',
-            'field_type' => 'required',
-            'enum_uid' => 'nullable',
+            'field_type' => ['required', Rule::in($this->fieldTypeOptions())],
+            'enum_uid' => [
+                'nullable',
+                'required_if:field_type,enum',
+                $this->availableEnumRule($request),
+            ],
             'calc_formula' => 'nullable',
             'validation_rule' => 'nullable|string',
             'validation_config' => 'nullable|array',
@@ -164,7 +170,7 @@ class TrackableController extends Controller
                 $validated['alias'] ?? null
             ),
             'field_type' => $validated['field_type'],
-            'enum_uid' => $validated['enum_uid'] ?? null,
+            'enum_uid' => $validated['field_type'] === 'enum' ? $validated['enum_uid'] : null,
             'calc_formula' => $validated['calc_formula'] ?? null,
             'validation_config' => $validationConfig,
         ]);
@@ -175,14 +181,15 @@ class TrackableController extends Controller
     {
         // Find the model by ID
         $model = TrackableSchema::findOrFail($request->schema);
+        abort_unless($model->trackable_uid === $request->trackable->uid, 404);
 
         // Define validation rules
         // https://laravel.com/docs/11.x/validation#available-validation-rules
         $rules = [
             'name' => 'sometimes|string|max:80',
             'alias' => 'sometimes|string|max:80',
-            'field_type' => 'sometimes|string',
-            'enum_uid' => 'sometimes|string|max:24',
+            'field_type' => ['sometimes', 'string', Rule::in($this->fieldTypeOptions())],
+            'enum_uid' => ['sometimes', 'nullable', 'string', 'max:24', $this->availableEnumRule($request)],
             'calc_formula' => 'sometimes|',
             'validation_rule' => 'sometimes|',
             'validation_config' => 'sometimes|array',
@@ -197,6 +204,16 @@ class TrackableController extends Controller
 
         // Update only the provided fields
         $payload = $request->only(array_keys($rules));
+        $resultingFieldType = $payload['field_type'] ?? $model->field_type;
+        $resultingEnumUid = array_key_exists('enum_uid', $payload) ? $payload['enum_uid'] : $model->enum_uid;
+
+        if ($resultingFieldType === 'enum' && blank($resultingEnumUid)) {
+            return response()->json(['errors' => ['enum_uid' => ['An enum field must use a list.']]], 422);
+        }
+
+        if ($resultingFieldType !== 'enum') {
+            $payload['enum_uid'] = null;
+        }
 
         if (array_key_exists('name', $payload) || array_key_exists('alias', $payload)) {
             $payload['alias'] = TrackableSchema::generateUniqueAlias(
@@ -230,19 +247,19 @@ class TrackableController extends Controller
         $sortDir = $request->query('sort_dir', 'desc');
         $perPage = (int) $request->query('per_page', 25);
 
-        if (!in_array($sortBy, $sortOptions, true)) {
+        if (! in_array($sortBy, $sortOptions, true)) {
             $sortBy = 'record_date';
         }
 
-        if (!in_array($sortDir, ['asc', 'desc'], true)) {
+        if (! in_array($sortDir, ['asc', 'desc'], true)) {
             $sortDir = 'desc';
         }
 
-        if (!in_array($perPage, $perPageOptions, true)) {
+        if (! in_array($perPage, $perPageOptions, true)) {
             $perPage = 25;
         }
 
-        $trackable->load('schema');
+        $trackable->load('schema.enum.values');
 
         // Estrai e decodifica lo schema se è JSON
         $schema = $trackable->schema;
@@ -256,7 +273,7 @@ class TrackableController extends Controller
         $schemaCollection = collect($schema);
         $schemaFieldFilters = collect($request->query('schema', []))
             ->filter(function ($value) {
-                return !is_null($value) && trim((string) $value) !== '';
+                return ! is_null($value) && trim((string) $value) !== '';
             })
             ->map(function ($value) {
                 return trim((string) $value);
@@ -404,7 +421,7 @@ class TrackableController extends Controller
     public function toggleTrackable(Trackable $trackable)
     {
         $trackable->update([
-            'deleted' => !$trackable->deleted,
+            'deleted' => ! $trackable->deleted,
         ]);
 
         return redirect()
@@ -414,12 +431,20 @@ class TrackableController extends Controller
 
     public function editSchemaPage(Trackable $trackable)
     {
-        $trackable->load(['schema' => fn ($query) => $query->orderBy('created_at')]);
+        $trackable->load(['schema' => fn ($query) => $query->with('enum')->orderBy('created_at')]);
+
+        $enumOptions = TrackableEnum::query()
+            ->where(fn ($query) => $query
+                ->where('user_id', $trackable->user_id)
+                ->orWhereNull('user_id'))
+            ->orderBy('name')
+            ->get();
 
         return view('trackables.edit-schema', [
             'trackable' => $trackable,
             'schemaFields' => $trackable->schema,
-            'fieldTypeOptions' => ['int', 'float', 'json', 'string', 'bool', 'date', 'datetime', 'img', 'url', 'enum', 'calc'],
+            'fieldTypeOptions' => $this->fieldTypeOptions(),
+            'enumOptions' => $enumOptions,
             'schemaPresets' => $this->getSeededSchemaPresets(),
         ]);
     }
@@ -453,7 +478,7 @@ class TrackableController extends Controller
 
     public function createRecord(Trackable $trackable)
     {
-        $schema = $trackable->schema()->orderBy('created_at')->get();
+        $schema = $trackable->schema()->with('enum.values')->orderBy('created_at')->get();
 
         return view('trackables.create-record', compact('trackable', 'schema'));
     }
@@ -472,7 +497,7 @@ class TrackableController extends Controller
     public function editRecord(Trackable $trackable, TrackableRecord $record)
     {
         $record = $this->getTrackableRecordOrFail($trackable, $record);
-        $schema = $trackable->schema()->orderBy('created_at')->get();
+        $schema = $trackable->schema()->with('enum.values')->orderBy('created_at')->get();
         $recordValues = $this->getRecordValues($record);
         $recordDateValue = optional($record->record_date)->format('Y-m-d\TH:i');
 
@@ -483,7 +508,7 @@ class TrackableController extends Controller
     {
         $record = $this->getTrackableRecordOrFail($trackable, $record);
         $this->validateRecordDateValue($request->input('record_date'));
-        $validated = $this->validateSingleRecord($request, $trackable);
+        $validated = $this->validateSingleRecord($request, $trackable, null, $record);
         $this->updateSingleRecord($record, $validated, $request->input('record_date'));
 
         return redirect()
@@ -527,7 +552,7 @@ class TrackableController extends Controller
                 $validated['alias'] ?? null
             ),
             'field_type' => $validated['field_type'],
-            'enum_uid' => $validated['enum_uid'] ?? null,
+            'enum_uid' => $validated['field_type'] === 'enum' ? $validated['enum_uid'] : null,
             'calc_formula' => $validated['calc_formula'] ?? null,
             'validation_config' => $validationConfig,
         ]);
@@ -605,7 +630,7 @@ class TrackableController extends Controller
                 $schema->uid
             ),
             'field_type' => $validated['field_type'],
-            'enum_uid' => $validated['enum_uid'] ?? null,
+            'enum_uid' => $validated['field_type'] === 'enum' ? $validated['enum_uid'] : null,
             'calc_formula' => $validated['calc_formula'] ?? null,
             'validation_config' => $validationConfig,
         ]);
@@ -663,10 +688,11 @@ class TrackableController extends Controller
             ->with('status', 'Graph deleted successfully.');
     }
 
-    private function validateSingleRecord(Request $request, Trackable $trackable, ?array $payload = null): array
+    private function validateSingleRecord(Request $request, Trackable $trackable, ?array $payload = null, ?TrackableRecord $record = null): array
     {
-        $schema = $trackable->schema->keyBy('uid');
-        $validationRules = $this->getSingleRecordValidationRules($schema);
+        $schema = $trackable->schema()->with('enum.values')->get()->keyBy('uid');
+        $existingValues = $record ? $this->getRecordValues($record) : [];
+        $validationRules = $this->getSingleRecordValidationRules($schema, $existingValues);
 
         if (empty($validationRules)) {
             abort(400, 'No validation rules were applied. Ensure your input matches the schema.');
@@ -696,8 +722,14 @@ class TrackableController extends Controller
         return $request->validate([
             'name' => 'required|string|max:80',
             'alias' => 'nullable|string|max:80',
-            'field_type' => 'required|string',
-            'enum_uid' => 'nullable|string|max:24',
+            'field_type' => ['required', 'string', Rule::in($this->fieldTypeOptions())],
+            'enum_uid' => [
+                'nullable',
+                'required_if:field_type,enum',
+                'string',
+                'max:24',
+                $this->availableEnumRule($request),
+            ],
             'calc_formula' => 'nullable',
             'validation_rule' => 'nullable|string',
             'validation_config' => 'nullable|array',
@@ -749,23 +781,51 @@ class TrackableController extends Controller
         ];
     }
 
-    private function getSingleRecordValidationRules(Collection $schema): array
+    private function getSingleRecordValidationRules(Collection $schema, array $existingValues = []): array
     {
-        return $schema->mapWithKeys(function ($item, $key) {
-            return [$key => $item->validation_rule];
+        return $schema->mapWithKeys(function ($item, $key) use ($existingValues) {
+            $rules = explode('|', $item->validation_rule);
+
+            if ($item->field_type === 'enum') {
+                $currentValue = $existingValues[$item->uid] ?? null;
+                $rules[] = Rule::exists('enum_values', 'uid')->where(function ($query) use ($item, $currentValue) {
+                    $query->where('enum_uid', $item->enum_uid)
+                        ->where(function ($valueQuery) use ($currentValue) {
+                            $valueQuery->where('is_active', true);
+
+                            if ($currentValue) {
+                                $valueQuery->orWhere('uid', $currentValue);
+                            }
+                        });
+                });
+            }
+
+            return [$key => $rules];
         })->toArray();
+    }
+
+    private function availableEnumRule(Request $request)
+    {
+        return Rule::exists('enums', 'uid')->where(fn ($query) => $query
+            ->where('user_id', $request->user()->id)
+            ->orWhereNull('user_id'));
+    }
+
+    private function fieldTypeOptions(): array
+    {
+        return ['int', 'float', 'json', 'string', 'bool', 'date', 'datetime', 'img', 'url', 'enum', 'calc'];
     }
 
     private function usesExactSchemaFilter(?string $fieldType): bool
     {
-        return in_array($fieldType, ['int', 'float', 'bool', 'date', 'datetime'], true);
+        return in_array($fieldType, ['int', 'float', 'bool', 'date', 'datetime', 'enum'], true);
     }
 
     private function normalizeApiRecordPayload(array $payload, Trackable $trackable): array
     {
         $schema = $trackable->schema;
         $schemaByUid = $schema->keyBy('uid');
-        $schemaByAlias = $schema->filter(fn ($field) => !empty($field->alias))->keyBy('alias');
+        $schemaByAlias = $schema->filter(fn ($field) => ! empty($field->alias))->keyBy('alias');
         $normalized = [];
         $recordDate = $payload['record_date'] ?? null;
 
@@ -776,7 +836,7 @@ class TrackableController extends Controller
 
             $field = $schemaByUid->get($key) ?? $schemaByAlias->get(Str::snake((string) $key));
 
-            if (!$field) {
+            if (! $field) {
                 continue;
             }
 
@@ -858,7 +918,7 @@ class TrackableController extends Controller
         ]);
 
         $validated['filters'] = collect($validated['filters'] ?? [])
-            ->filter(fn ($value) => !is_null($value) && trim((string) $value) !== '')
+            ->filter(fn ($value) => ! is_null($value) && trim((string) $value) !== '')
             ->map(fn ($value) => trim((string) $value))
             ->only($trackable->schema->pluck('uid')->all())
             ->toArray();
@@ -1052,7 +1112,7 @@ class TrackableController extends Controller
         foreach ($graph->schema_uids as $schemaUid) {
             $field = $schemaByUid->get($schemaUid);
 
-            if (!$field || !$this->isGraphableFieldType($field->field_type)) {
+            if (! $field || ! $this->isGraphableFieldType($field->field_type)) {
                 continue;
             }
 
@@ -1061,7 +1121,7 @@ class TrackableController extends Controller
                 'data' => $recordsByUid->map(function ($recordRows) use ($schemaUid, $field) {
                     $dataRow = $recordRows->firstWhere('trackable_schema_uid', $schemaUid);
 
-                    if (!$dataRow) {
+                    if (! $dataRow) {
                         return null;
                     }
 
@@ -1086,7 +1146,7 @@ class TrackableController extends Controller
         foreach ($graph->schema_uids as $schemaUid) {
             $field = $schemaByUid->get($schemaUid);
 
-            if (!$field || !$this->isGraphableFieldType($field->field_type)) {
+            if (! $field || ! $this->isGraphableFieldType($field->field_type)) {
                 continue;
             }
 
@@ -1119,7 +1179,7 @@ class TrackableController extends Controller
             ->when($this->getGraphRangeStart($graph->range_type), function ($query, $startDate) {
                 $query->where('records.record_date', '>=', $startDate);
             })
-            ->when(!empty($graph->filters), function ($query) use ($schemaByUid, $graph) {
+            ->when(! empty($graph->filters), function ($query) use ($schemaByUid, $graph) {
                 foreach ($graph->filters as $schemaUid => $value) {
                     $field = $schemaByUid->get($schemaUid);
                     $operator = $this->usesExactSchemaFilter($field?->field_type) ? '=' : 'like';
@@ -1213,7 +1273,7 @@ class TrackableController extends Controller
         };
     }
 
-    private function aggregateGraphPoints(\Illuminate\Support\Collection $points, string $aggregate): float|int
+    private function aggregateGraphPoints(Collection $points, string $aggregate): float|int
     {
         return match ($aggregate) {
             'average' => round($points->avg('value'), 4),

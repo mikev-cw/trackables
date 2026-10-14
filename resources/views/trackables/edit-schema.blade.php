@@ -401,12 +401,24 @@
                                         @error('field_type')<div class="invalid-feedback">{{ $message }}</div>@enderror
                                     @endif
                                 </div>
-                                <div>
-                                    <label class="form-label">Enum UID</label>
-                                    <input class="form-control @error('enum_uid') {{ $isErroredField ? 'is-invalid' : '' }} @enderror" name="enum_uid" type="text" value="{{ $isErroredField ? old('enum_uid') : $field->enum_uid }}">
+                                <div data-enum-control>
+                                    <label class="form-label">List</label>
+                                    <select class="form-select @error('enum_uid') {{ $isErroredField ? 'is-invalid' : '' }} @enderror" name="enum_uid">
+                                        <option value="">Choose a list</option>
+                                        @foreach($enumOptions as $enumOption)
+                                            <option value="{{ $enumOption->uid }}" @selected(($isErroredField ? old('enum_uid') : $field->enum_uid) === $enumOption->uid)>
+                                                {{ $enumOption->name }}{{ is_null($enumOption->user_id) ? ' (system)' : '' }}
+                                            </option>
+                                        @endforeach
+                                    </select>
                                     @if($isErroredField)
                                         @error('enum_uid')<div class="invalid-feedback">{{ $message }}</div>@enderror
                                     @endif
+                                    <div class="form-hint">
+                                        <a href="{{ $field->enum && $field->enum->user_id === auth()->id() ? route('enums.edit', $field->enum->uid) : route('enums.index') }}">
+                                            {{ $field->enum && $field->enum->user_id === auth()->id() ? 'Manage this list' : 'Manage lists' }}
+                                        </a>
+                                    </div>
                                 </div>
                                 <div>
                                     <label class="form-label">UID</label>
@@ -547,12 +559,20 @@
                                             @error('field_type')<div class="invalid-feedback">{{ $message }}</div>@enderror
                                         @endif
                                     </div>
-                                    <div class="col-12 col-md-6">
-                                        <label class="form-label">Enum UID</label>
-                                        <input class="form-control @error('enum_uid') {{ old('_schema_form') === 'create' ? 'is-invalid' : '' }} @enderror" name="enum_uid" type="text" value="{{ old('_schema_form') === 'create' ? old('enum_uid') : '' }}">
+                                    <div class="col-12 col-md-6" data-enum-control>
+                                        <label class="form-label">List</label>
+                                        <select class="form-select @error('enum_uid') {{ old('_schema_form') === 'create' ? 'is-invalid' : '' }} @enderror" name="enum_uid">
+                                            <option value="">Choose a list</option>
+                                            @foreach($enumOptions as $enumOption)
+                                                <option value="{{ $enumOption->uid }}" @selected(old('_schema_form') === 'create' && old('enum_uid') === $enumOption->uid)>
+                                                    {{ $enumOption->name }}{{ is_null($enumOption->user_id) ? ' (system)' : '' }}
+                                                </option>
+                                            @endforeach
+                                        </select>
                                         @if(old('_schema_form') === 'create')
                                             @error('enum_uid')<div class="invalid-feedback">{{ $message }}</div>@enderror
                                         @endif
+                                        <div class="form-hint"><a href="{{ route('enums.create') }}">Create a reusable list</a></div>
                                     </div>
                                     <div class="col-12">
                                         <div class="schema-validation-builder" data-validation-builder>
@@ -710,6 +730,7 @@
             document.querySelectorAll('form').forEach((form) => {
                 const fieldTypeInput = form.querySelector('[data-validation-field-type]');
                 const builder = form.querySelector('[data-validation-builder]');
+                const enumControl = form.querySelector('[data-enum-control]');
 
                 if (!fieldTypeInput || !builder) {
                     return;
@@ -737,6 +758,8 @@
                     const usesNumber = numberTypes.includes(fieldType);
                     const usesLength = lengthTypes.includes(fieldType);
                     const usesFormat = fieldType === 'string';
+
+                    enumControl?.classList.toggle('d-none', fieldType !== 'enum');
 
                     setControlVisibility('number', usesNumber);
                     setControlVisibility('length', usesLength);

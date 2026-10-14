@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
 class TrackableSchema extends baseModel
@@ -24,6 +25,16 @@ class TrackableSchema extends baseModel
                 $schema->alias = static::generateUniqueAlias($schema->trackable_uid, $schema->name);
             }
         });
+    }
+
+    public function enum(): BelongsTo
+    {
+        return $this->belongsTo(TrackableEnum::class, 'enum_uid', 'uid');
+    }
+
+    public function trackable(): BelongsTo
+    {
+        return $this->belongsTo(Trackable::class, 'trackable_uid', 'uid');
     }
 
     public static function generateUniqueAlias(string $trackableUid, string $name, ?string $preferredAlias = null, ?string $ignoreUid = null): string
@@ -57,12 +68,12 @@ class TrackableSchema extends baseModel
             'format' => in_array($config['format'] ?? null, static::allowedFormats(), true) ? $config['format'] : null,
         ];
 
-        if (!in_array($fieldType, ['int', 'float'], true)) {
+        if (! in_array($fieldType, ['int', 'float'], true)) {
             $normalized['min'] = null;
             $normalized['max'] = null;
         }
 
-        if (!in_array($fieldType, ['string', 'url', 'img', 'json'], true)) {
+        if (! in_array($fieldType, ['string', 'url', 'img', 'json'], true)) {
             $normalized['max_length'] = null;
         }
 
@@ -91,15 +102,15 @@ class TrackableSchema extends baseModel
 
         $rules[] = $typeRule;
 
-        if (!is_null($config['min'])) {
+        if (! is_null($config['min'])) {
             $rules[] = 'min:'.$config['min'];
         }
 
-        if (!is_null($config['max'])) {
+        if (! is_null($config['max'])) {
             $rules[] = 'max:'.$config['max'];
         }
 
-        if (!is_null($config['max_length'])) {
+        if (! is_null($config['max_length'])) {
             $rules[] = 'max:'.$config['max_length'];
         }
 
@@ -168,7 +179,7 @@ class TrackableSchema extends baseModel
 
     private static function nullableNumeric(mixed $value): int|float|null
     {
-        if ($value === '' || is_null($value) || !is_numeric($value)) {
+        if ($value === '' || is_null($value) || ! is_numeric($value)) {
             return null;
         }
 
@@ -177,7 +188,7 @@ class TrackableSchema extends baseModel
 
     private static function nullableInteger(mixed $value): ?int
     {
-        if ($value === '' || is_null($value) || !is_numeric($value)) {
+        if ($value === '' || is_null($value) || ! is_numeric($value)) {
             return null;
         }
 

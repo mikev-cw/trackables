@@ -101,6 +101,26 @@
                                 >{{ $fieldValue }}</textarea>
                                 @break
 
+                            @case('enum')
+                                <select
+                                    class="form-select @error($field->uid) is-invalid @enderror"
+                                    id="field-{{ $field->uid }}"
+                                    name="{{ $field->uid }}"
+                                >
+                                    <option value="">Choose {{ str($field->name)->lower() }}</option>
+                                    @foreach($field->enum?->values ?? collect() as $enumValue)
+                                        @if($enumValue->is_active || $enumValue->uid === $fieldValue)
+                                            <option value="{{ $enumValue->uid }}" @selected($enumValue->uid === $fieldValue)>
+                                                {{ $enumValue->display_label }}{{ $enumValue->is_active ? '' : ' (retired)' }}
+                                            </option>
+                                        @endif
+                                    @endforeach
+                                </select>
+                                @if($fieldValue && !($field->enum?->values->contains('uid', $fieldValue) ?? false))
+                                    <div class="form-hint text-warning">The previously stored value no longer belongs to this list.</div>
+                                @endif
+                                @break
+
                             @default
                                 <input
                                     class="form-control @error($field->uid) is-invalid @enderror"

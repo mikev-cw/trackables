@@ -10,7 +10,7 @@ class TrackableRecordController extends Controller
 {
     public function getRecords(Request $request)
     {
-        return TrackableRecordResource::collection(TrackableRecord::with('data')
+        return TrackableRecordResource::collection(TrackableRecord::with('data.schema.enum.values')
             ->where('trackable_uid', $request->trackable->uid)
             ->orderByDesc('created_at')
             ->paginate(10));

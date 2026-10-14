@@ -3,9 +3,9 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\TrackableController;
+use App\Http\Controllers\TrackableEnumController;
 use App\Http\Controllers\TrackableGroupController;
 use Illuminate\Support\Facades\Route;
-
 
 Route::middleware('guest')->group(function () {
     Route::view('/login', 'auth.login')->name('login');
@@ -23,6 +23,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/trackable-groups/{trackableGroup}/edit', [TrackableGroupController::class, 'edit'])->name('trackable-groups.edit');
     Route::put('/trackable-groups/{trackableGroup}', [TrackableGroupController::class, 'update'])->name('trackable-groups.update');
     Route::patch('/trackable-groups/{trackableGroup}/toggle', [TrackableGroupController::class, 'toggle'])->name('trackable-groups.toggle');
+    Route::get('/enums', [TrackableEnumController::class, 'index'])->name('enums.index');
+    Route::get('/enums/create', [TrackableEnumController::class, 'create'])->name('enums.create');
+    Route::post('/enums', [TrackableEnumController::class, 'store'])->name('enums.store');
+    Route::get('/enums/{enum}/edit', [TrackableEnumController::class, 'edit'])->name('enums.edit');
+    Route::put('/enums/{enum}', [TrackableEnumController::class, 'update'])->name('enums.update');
+    Route::post('/enums/{enum}/values', [TrackableEnumController::class, 'storeValue'])->name('enums.values.store');
+    Route::put('/enums/{enum}/values/{enumValue}', [TrackableEnumController::class, 'updateValue'])->name('enums.values.update');
+    Route::patch('/enums/{enum}/values/{enumValue}/toggle', [TrackableEnumController::class, 'toggleValue'])->name('enums.values.toggle');
     Route::get('/trackables/create', [TrackableController::class, 'createTrackablePage'])->name('trackables.create');
     Route::post('/trackables', [TrackableController::class, 'storeTrackable'])->name('trackables.store');
     Route::get('/trackables/{trackable}/edit', [TrackableController::class, 'editTrackablePage'])
