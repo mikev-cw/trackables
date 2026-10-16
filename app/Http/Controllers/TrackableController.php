@@ -54,6 +54,13 @@ class TrackableController extends Controller
             ->paginate(10));
     }
 
+    public function detail(Trackable $trackable): TrackableResource
+    {
+        abort_if($trackable->deleted, 404);
+
+        return new TrackableResource($trackable->load('schema.enum.values'));
+    }
+
     public function storeSingleRecord(Request $request)
     {
         $trackable = $request->trackable;

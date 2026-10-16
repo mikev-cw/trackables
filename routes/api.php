@@ -21,6 +21,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // List Trackables
     Route::get('trackable', [TrackableController::class, 'list']);
 
+    // Get a single Trackable
+    Route::get('trackable/{trackable}', [TrackableController::class, 'detail'])
+        ->can('own', 'trackable');
+
     // Create Trackable
     Route::post('trackable', [TrackableController::class, 'create']);
 
