@@ -1,4 +1,4 @@
-<div class="card">
+<div class="card" @if ($autoAlias ?? false) id="trackable-create-form" data-alias-preview-url="{{ route('trackables.alias-preview') }}" @endif>
     <div class="card-header">
         <h3 class="card-title">{{ $cardTitle }}</h3>
     </div>
@@ -14,7 +14,9 @@
                     class="form-control @error('name') is-invalid @enderror"
                     id="trackable-name"
                     name="name"
+                    @if ($autoAlias ?? false) v-model="name" @endif
                     type="text"
+                    maxlength="255"
                     value="{{ old('name', $trackable->name ?? '') }}"
                     placeholder="Fuel prices, Office climate, Water meter"
                 >
@@ -28,7 +30,9 @@
                     class="form-control @error('alias') is-invalid @enderror"
                     id="trackable-alias"
                     name="alias"
+                    @if ($autoAlias ?? false) v-model="alias" v-on:input="editAlias" @endif
                     type="text"
+                    maxlength="255"
                     value="{{ old('alias', $trackable->alias ?? '') }}"
                     placeholder="fuel_prices"
                 >

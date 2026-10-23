@@ -365,6 +365,17 @@ class TrackableController extends Controller
         return view('trackables.create-trackable', compact('groups'));
     }
 
+    public function previewTrackableAlias(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+        ]);
+
+        return response()->json([
+            'alias' => Trackable::generateUniqueAlias($validated['name']),
+        ]);
+    }
+
     public function storeTrackable(Request $request)
     {
         $validated = $request->validate([

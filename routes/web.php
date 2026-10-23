@@ -32,6 +32,7 @@ Route::middleware('auth')->group(function () {
     Route::put('/enums/{enum}/values/{enumValue}', [TrackableEnumController::class, 'updateValue'])->name('enums.values.update');
     Route::patch('/enums/{enum}/values/{enumValue}/toggle', [TrackableEnumController::class, 'toggleValue'])->name('enums.values.toggle');
     Route::get('/trackables/create', [TrackableController::class, 'createTrackablePage'])->name('trackables.create');
+    Route::get('/trackables/alias-preview', [TrackableController::class, 'previewTrackableAlias'])->name('trackables.alias-preview');
     Route::post('/trackables', [TrackableController::class, 'storeTrackable'])->name('trackables.store');
     Route::get('/trackables/{trackable}/edit', [TrackableController::class, 'editTrackablePage'])
         ->can('own', 'trackable')

@@ -83,6 +83,46 @@ class TrackableManagementTest extends TestCase
         ]);
     }
 
+    public function test_alias_preview_matches_the_alias_saved_when_creating_a_trackable(): void
+    {
+        $user = User::factory()->create();
+        Trackable::factory()->create(['name' => 'Office climate', 'alias' => 'office_climate']);
+        Trackable::factory()->create(['name' => 'Office climate', 'alias' => 'office_climate_2']);
+
+        foreach (['Office climate', 'WaterMeter', 'Caffè daily', str_repeat('A', 255)] as $name) {
+            $preview = $this->actingAs($user)
+                ->getJson(route('trackables.alias-preview', ['name' => $name]))
+                ->assertOk();
+
+            $alias = $preview->json('alias');
+            $this->assertSame(Trackable::generateUniqueAlias($name), $alias);
+
+            if ($name === 'Office climate') {
+                $this->assertSame('office_climate_3', $alias);
+            }
+
+            $this->post(route('trackables.store'), ['name' => $name, 'alias' => $alias])
+                ->assertSessionHasNoErrors();
+
+            $this->assertDatabaseHas('trackables', [
+                'user_id' => $user->id,
+                'name' => $name,
+                'alias' => $alias,
+            ]);
+        }
+    }
+
+    public function test_alias_preview_requires_authentication_and_a_valid_name(): void
+    {
+        $this->getJson(route('trackables.alias-preview', ['name' => 'Office climate']))
+            ->assertUnauthorized();
+
+        $this->actingAs(User::factory()->create())
+            ->getJson(route('trackables.alias-preview', ['name' => str_repeat('a', 256)]))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('name');
+    }
+
     public function test_dashboard_arranges_trackables_by_group_when_groups_are_configured(): void
     {
         $user = User::factory()->create();

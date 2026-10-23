@@ -1,6 +1,7 @@
 <x-layout>
     <x-slot name="pretitle">Trackables</x-slot>
     <x-slot name="title">Create Trackable</x-slot>
+    <x-slot name="script">js/trackable-form.js</x-slot>
     <x-slot name="actions">
         <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary">Back to dashboard</a>
     </x-slot>
@@ -10,5 +11,6 @@
         'method' => 'POST',
         'cardTitle' => 'Trackable details',
         'submitLabel' => 'Create trackable',
+        'autoAlias' => true,
     ])
 </x-layout>
