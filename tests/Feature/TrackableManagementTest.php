@@ -262,6 +262,73 @@ class TrackableManagementTest extends TestCase
         $this->assertSame('nullable|string|max:255', $field->fresh()->validation_rule);
     }
 
+    public function test_schema_alias_preview_matches_saved_alias_and_scopes_duplicates_to_the_trackable(): void
+    {
+        $user = User::factory()->create();
+        $trackable = Trackable::factory()->create(['user_id' => $user->id]);
+        $otherTrackable = Trackable::factory()->create(['user_id' => $user->id]);
+
+        foreach (['pump_name', 'pump_name_2'] as $alias) {
+            TrackableSchema::factory()->create([
+                'trackable_uid' => $trackable->uid,
+                'alias' => $alias,
+            ]);
+        }
+
+        TrackableSchema::factory()->create([
+            'trackable_uid' => $otherTrackable->uid,
+            'alias' => 'pump_name_3',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('trackables.schema.edit', $trackable->uid))
+            ->assertOk()
+            ->assertSee('data-alias-preview-url="'.route('trackables.schema.alias-preview', $trackable->uid).'"', false)
+            ->assertSee('js/trackable-form.js');
+
+        foreach (['Pump Name', 'WaterMeter', 'Caffè daily', str_repeat('A', 80)] as $name) {
+            $preview = $this->getJson(route('trackables.schema.alias-preview', [
+                'trackable' => $trackable->uid,
+                'name' => $name,
+            ]))->assertOk();
+            $alias = $preview->json('alias');
+
+            $this->assertSame(TrackableSchema::generateUniqueAlias($trackable->uid, $name), $alias);
+            if ($name === 'Pump Name') {
+                $this->assertSame('pump_name_3', $alias);
+            }
+
+            $this->post(route('trackables.schema.store', $trackable->uid), [
+                'name' => $name,
+                'alias' => $alias,
+                'field_type' => 'string',
+            ])->assertSessionHasNoErrors();
+
+            $this->assertDatabaseHas('trackable_schemas', [
+                'trackable_uid' => $trackable->uid,
+                'name' => $name,
+                'alias' => $alias,
+            ]);
+        }
+    }
+
+    public function test_schema_alias_preview_requires_ownership_and_a_valid_name(): void
+    {
+        $owner = User::factory()->create();
+        $trackable = Trackable::factory()->create(['user_id' => $owner->id]);
+        $url = route('trackables.schema.alias-preview', ['trackable' => $trackable->uid, 'name' => 'Pump Name']);
+
+        $this->getJson($url)->assertUnauthorized();
+        $this->actingAs(User::factory()->create())->getJson($url)->assertForbidden();
+        $this->actingAs($owner)
+            ->getJson(route('trackables.schema.alias-preview', [
+                'trackable' => $trackable->uid,
+                'name' => str_repeat('a', 81),
+            ]))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('name');
+    }
+
     public function test_schema_page_generates_validation_rules_from_structured_config(): void
     {
         $user = User::factory()->create();

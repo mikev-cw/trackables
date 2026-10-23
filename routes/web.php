@@ -49,6 +49,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/trackables/{trackable}/schema', [TrackableController::class, 'storeSchemaFromPage'])
         ->can('own', 'trackable')
         ->name('trackables.schema.store');
+    Route::get('/trackables/{trackable}/schema/alias-preview', [TrackableController::class, 'previewSchemaAlias'])
+        ->can('own', 'trackable')
+        ->name('trackables.schema.alias-preview');
     Route::post('/trackables/{trackable}/schema/presets', [TrackableController::class, 'storeSchemaPresetFromPage'])
         ->can('own', 'trackable')
         ->name('trackables.schema.presets.store');

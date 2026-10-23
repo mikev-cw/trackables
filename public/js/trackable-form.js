@@ -1,6 +1,4 @@
-const trackableForm = document.getElementById('trackable-create-form');
-
-if (trackableForm) {
+document.querySelectorAll('[data-alias-preview-url]').forEach((trackableForm) => {
     const initialName = trackableForm.querySelector('[name="name"]').value;
     const initialAlias = trackableForm.querySelector('[name="alias"]').value;
     let previewTimer;
@@ -67,4 +65,4 @@ if (trackableForm) {
             },
         },
     }).mount(trackableForm);
-}
+});

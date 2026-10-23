@@ -30,6 +30,7 @@
 <x-layout>
     <x-slot name="pretitle">Trackables</x-slot>
     <x-slot name="title">Edit Schema for {{ $trackable->name }}</x-slot>
+    <x-slot name="script">js/trackable-form.js</x-slot>
     <x-slot name="actions">
         <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addFieldModal">
             Add field
@@ -529,21 +530,21 @@
 
                     <div class="tab-content">
                         <div class="tab-pane fade {{ old('_schema_form') === 'preset' ? '' : 'show active' }}" id="schemaSinglePane" role="tabpanel" aria-labelledby="schema-single-tab" tabindex="0">
-                            <form id="singleFieldForm" method="POST" action="{{ route('trackables.schema.store', $trackable->uid) }}">
+                            <form id="singleFieldForm" method="POST" action="{{ route('trackables.schema.store', $trackable->uid) }}" data-alias-preview-url="{{ route('trackables.schema.alias-preview', $trackable->uid) }}">
                                 @csrf
                                 <input type="hidden" name="_schema_form" value="create">
 
                                 <div class="row g-3">
                                     <div class="col-12 col-md-6">
                                         <label class="form-label">Name</label>
-                                        <input class="form-control @error('name') {{ old('_schema_form') === 'create' ? 'is-invalid' : '' }} @enderror" name="name" type="text" value="{{ old('_schema_form') === 'create' ? old('name') : '' }}" autofocus>
+                                        <input class="form-control @error('name') {{ old('_schema_form') === 'create' ? 'is-invalid' : '' }} @enderror" name="name" type="text" v-model="name" maxlength="80" value="{{ old('_schema_form') === 'create' ? old('name') : '' }}" autofocus>
                                         @if(old('_schema_form') === 'create')
                                             @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                                         @endif
                                     </div>
                                     <div class="col-12 col-md-6">
                                         <label class="form-label">Alias</label>
-                                        <input class="form-control @error('alias') {{ old('_schema_form') === 'create' ? 'is-invalid' : '' }} @enderror" name="alias" type="text" value="{{ old('_schema_form') === 'create' ? old('alias') : '' }}" placeholder="pump_name">
+                                        <input class="form-control @error('alias') {{ old('_schema_form') === 'create' ? 'is-invalid' : '' }} @enderror" name="alias" type="text" v-model="alias" v-on:input="editAlias" maxlength="80" value="{{ old('_schema_form') === 'create' ? old('alias') : '' }}" placeholder="pump_name">
                                         @if(old('_schema_form') === 'create')
                                             @error('alias')<div class="invalid-feedback">{{ $message }}</div>@enderror
                                         @endif

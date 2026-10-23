@@ -556,6 +556,17 @@ class TrackableController extends Controller
             ->with('status', 'Graph added successfully.');
     }
 
+    public function previewSchemaAlias(Request $request, Trackable $trackable)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:80',
+        ]);
+
+        return response()->json([
+            'alias' => TrackableSchema::generateUniqueAlias($trackable->uid, $validated['name']),
+        ]);
+    }
+
     public function storeSchemaFromPage(Request $request, Trackable $trackable)
     {
         $validated = $this->validateSchemaPayload($request);
