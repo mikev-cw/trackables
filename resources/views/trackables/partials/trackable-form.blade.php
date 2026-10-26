@@ -66,6 +66,9 @@
         </div>
         <div class="card-footer">
             <button type="submit" class="btn btn-primary">{{ $submitLabel }}</button>
+            @if (!empty($cancelUrl))
+                <a href="{{ $cancelUrl }}" class="btn btn-outline-secondary">Cancel</a>
+            @endif
         </div>
     </form>
 </div>

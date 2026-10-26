@@ -4,6 +4,7 @@
     <x-slot name="actions">
         <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary">Back to dashboard</a>
         <a href="{{ route('trackables.schema.edit', $trackable->uid) }}" class="btn btn-outline-primary">Edit schema</a>
+        <a href="{{ route('trackables.duplicate', $trackable->uid) }}" class="btn btn-outline-primary" title="Copy schema and statistics without records">Duplicate trackable</a>
     </x-slot>
 
     @if (session('status'))

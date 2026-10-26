@@ -35,6 +35,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/trackables/create', [TrackableController::class, 'createTrackablePage'])->name('trackables.create');
     Route::get('/trackables/alias-preview', [TrackableController::class, 'previewTrackableAlias'])->name('trackables.alias-preview');
     Route::post('/trackables', [TrackableController::class, 'storeTrackable'])->name('trackables.store');
+    Route::get('/trackables/{trackable}/duplicate', [TrackableController::class, 'duplicateTrackablePage'])
+        ->can('own', 'trackable')
+        ->name('trackables.duplicate');
+    Route::post('/trackables/{trackable}/duplicate', [TrackableController::class, 'duplicateTrackable'])
+        ->can('own', 'trackable')
+        ->name('trackables.duplicate.store');
     Route::get('/trackables/{trackable}/edit', [TrackableController::class, 'editTrackablePage'])
         ->can('own', 'trackable')
         ->name('trackables.edit');

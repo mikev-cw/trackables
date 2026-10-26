@@ -38,6 +38,9 @@
             <a href="{{ route('trackables.schema.edit', $trackable) }}" class="btn btn-outline-secondary btn-sm flex-fill">
                 Edit schema
             </a>
+            <a href="{{ route('trackables.duplicate', $trackable) }}" class="btn btn-outline-secondary btn-sm flex-fill" title="Copy schema and statistics without records">
+                Duplicate
+            </a>
             <form method="POST" action="{{ route('trackables.toggle', $trackable) }}" class="flex-fill">
                 @csrf
                 @method('PATCH')

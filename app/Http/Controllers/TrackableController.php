@@ -400,6 +400,72 @@ class TrackableController extends Controller
             ->with('status', 'Trackable created successfully.');
     }
 
+    public function duplicateTrackablePage(Request $request, Trackable $trackable)
+    {
+        $source = $trackable;
+        $name = Str::limit($source->name, 248, '').' (copy)';
+        $trackable = new Trackable([
+            'name' => $name,
+            'alias' => Trackable::generateUniqueAlias($name),
+            'group_uid' => $source->group_uid,
+        ]);
+        $groups = $this->getTrackableGroupOptions($request);
+
+        return view('trackables.duplicate-trackable', compact('source', 'trackable', 'groups'));
+    }
+
+    public function duplicateTrackable(Request $request, Trackable $trackable)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'alias' => 'nullable|string|max:255',
+            'group_uid' => [
+                'nullable',
+                Rule::exists('trackable_groups', 'uid')->where(fn ($query) => $query->where('user_id', $request->user()->id)),
+            ],
+        ]);
+
+        $copy = DB::transaction(function () use ($trackable, $validated) {
+            $copy = Trackable::create([
+                'user_id' => $trackable->user_id,
+                'group_uid' => $validated['group_uid'] ?? null,
+                'name' => $validated['name'],
+                'alias' => Trackable::generateUniqueAlias($validated['name'], $validated['alias'] ?? null),
+                'deleted' => 0,
+            ]);
+
+            $schemaUids = [];
+
+            foreach ($trackable->schema()->orderBy('created_at')->get() as $field) {
+                $newField = $field->replicate();
+                $newField->trackable_uid = $copy->uid;
+                $newField->save();
+                $schemaUids[$field->uid] = $newField->uid;
+            }
+
+            foreach ($trackable->graphs()->orderBy('created_at')->get() as $graph) {
+                $newGraph = $graph->replicate();
+                $newGraph->trackable_uid = $copy->uid;
+                $newGraph->schema_uids = collect($graph->schema_uids ?? [])
+                    ->filter(fn ($uid) => isset($schemaUids[$uid]))
+                    ->map(fn ($uid) => $schemaUids[$uid])
+                    ->values()
+                    ->all();
+                $newGraph->filters = collect($graph->filters ?? [])
+                    ->filter(fn ($value, $uid) => isset($schemaUids[$uid]))
+                    ->mapWithKeys(fn ($value, $uid) => [$schemaUids[$uid] => $value])
+                    ->all();
+                $newGraph->save();
+            }
+
+            return $copy;
+        });
+
+        return redirect()
+            ->route('trackables.edit', $copy->uid)
+            ->with('status', 'Trackable duplicated with schema and statistics. No records were copied.');
+    }
+
     public function editTrackablePage(Trackable $trackable)
     {
         $trackable->load('group');
