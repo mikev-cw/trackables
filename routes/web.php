@@ -25,6 +25,7 @@ Route::middleware('auth')->group(function () {
     Route::patch('/trackable-groups/{trackableGroup}/toggle', [TrackableGroupController::class, 'toggle'])->name('trackable-groups.toggle');
     Route::get('/enums', [TrackableEnumController::class, 'index'])->name('enums.index');
     Route::get('/enums/create', [TrackableEnumController::class, 'create'])->name('enums.create');
+    Route::get('/enums/key-preview', [TrackableEnumController::class, 'previewKey'])->name('enums.key-preview');
     Route::post('/enums', [TrackableEnumController::class, 'store'])->name('enums.store');
     Route::get('/enums/{enum}/edit', [TrackableEnumController::class, 'edit'])->name('enums.edit');
     Route::put('/enums/{enum}', [TrackableEnumController::class, 'update'])->name('enums.update');

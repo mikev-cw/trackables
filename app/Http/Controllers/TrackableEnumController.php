@@ -28,6 +28,13 @@ class TrackableEnumController extends Controller
         return view('enums.create');
     }
 
+    public function previewKey(Request $request)
+    {
+        $validated = $request->validate(['label' => 'required|string|max:255']);
+
+        return response()->json(['key' => TrackableEnumValue::suggestKey($validated['label'])]);
+    }
+
     public function store(Request $request)
     {
         $request->merge(['values' => $this->normalizedNewValues($request->input('values', []))]);
@@ -128,9 +135,12 @@ class TrackableEnumController extends Controller
     {
         return collect($values)
             ->map(function (array $value) {
+                $label = trim((string) ($value['label'] ?? ''));
+                $key = trim((string) ($value['key'] ?? ''));
+
                 return [
-                    'key' => Str::snake(trim((string) ($value['key'] ?? ''))),
-                    'label' => trim((string) ($value['label'] ?? '')),
+                    'key' => $key !== '' ? Str::snake($key) : ($label !== '' ? TrackableEnumValue::suggestKey($label) : ''),
+                    'label' => $label,
                     'description' => trim((string) ($value['description'] ?? '')),
                 ];
             })

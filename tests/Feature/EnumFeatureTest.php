@@ -47,6 +47,43 @@ class EnumFeatureTest extends TestCase
         ]);
     }
 
+    public function test_suggested_keys_match_keys_saved_from_labels_and_preserve_custom_keys(): void
+    {
+        $user = User::factory()->create();
+        $values = [];
+
+        $this->actingAs($user)->get(route('enums.create'))
+            ->assertOk()
+            ->assertSeeInOrder(['<th>Label</th>', '<th>Key</th>'], false);
+
+        foreach (['In progress' => 'in_progress', 'Caffè & tea!' => 'caffe_tea', 'Ready-to-go' => 'ready_to_go'] as $label => $key) {
+            $this->actingAs($user)->getJson(route('enums.key-preview', ['label' => $label]))
+                ->assertOk()
+                ->assertJsonPath('key', $key);
+            $values[] = ['label' => $label];
+        }
+        $values[] = ['key' => 'custom_key', 'label' => 'Custom label'];
+        $values[] = ['key' => '', 'label' => '', 'description' => ''];
+
+        $this->post(route('enums.store'), ['name' => 'Statuses', 'values' => $values])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect();
+
+        $this->assertDatabaseCount('enum_values', 4);
+        foreach (['in_progress', 'caffe_tea', 'ready_to_go', 'custom_key'] as $key) {
+            $this->assertDatabaseHas('enum_values', ['value' => $key]);
+        }
+    }
+
+    public function test_key_preview_requires_authentication_and_a_valid_label(): void
+    {
+        $this->getJson(route('enums.key-preview', ['label' => 'Pending']))->assertUnauthorized();
+        $this->actingAs(User::factory()->create())
+            ->getJson(route('enums.key-preview', ['label' => str_repeat('a', 256)]))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('label');
+    }
+
     public function test_enum_record_fields_store_only_active_value_uids(): void
     {
         [$user, $trackable, $field, $active, $retired] = $this->enumFixture();

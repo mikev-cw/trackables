@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Str;
 
 class TrackableEnumValue extends baseModel
 {
@@ -14,6 +15,11 @@ class TrackableEnumValue extends baseModel
         'is_active' => 'boolean',
         'position' => 'integer',
     ];
+
+    public static function suggestKey(string $label): string
+    {
+        return rtrim(Str::limit(Str::slug($label, '_'), 255, ''), '_') ?: 'value';
+    }
 
     public function enum(): BelongsTo
     {
