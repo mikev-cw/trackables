@@ -159,7 +159,7 @@ class TrackableManagementTest extends TestCase
         $response->assertSee('data-dashboard-group-key="group-'.$transport->uid.'"', false);
         $response->assertSee('id="dashboard-group-ungrouped"', false);
         $response->assertSee('data-dashboard-group-key="ungrouped"', false);
-        $response->assertSee('trackables.dashboard.group.', false);
+        $response->assertSee('js/dashboard.js', false);
         $response->assertDontSee('>Toggle<', false);
         $response->assertSee(route('trackables.edit', $fuel->uid), false);
         $response->assertSee(route('trackables.edit', $sleep->uid), false);
@@ -173,7 +173,7 @@ class TrackableManagementTest extends TestCase
             'name' => 'Transport',
         ]);
 
-        for ($index = 1; $index <= 13; $index++) {
+        for ($index = 1; $index <= 25; $index++) {
             Trackable::create([
                 'user_id' => $user->id,
                 'group_uid' => $group->uid,
@@ -184,7 +184,7 @@ class TrackableManagementTest extends TestCase
         $response = $this->actingAs($user)->get(route('dashboard'));
 
         $response->assertOk();
-        $this->assertSame(12, substr_count($response->getContent(), 'Open records'));
+        $this->assertSame(24, substr_count($response->getContent(), 'Open records'));
         $response->assertSee('page=2', false);
     }
 
