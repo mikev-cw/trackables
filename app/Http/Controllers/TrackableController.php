@@ -583,7 +583,7 @@ class TrackableController extends Controller
         $record = $this->getTrackableRecordOrFail($trackable, $record);
         $schema = $trackable->schema()->with('enum.values')->orderBy('created_at')->get();
         $recordValues = $this->getRecordValues($record);
-        $recordDateValue = optional($record->record_date)->format('Y-m-d\TH:i');
+        $recordDateValue = Carbon::parse($record->record_date)->format('Y-m-d\TH:i:s');
 
         return view('trackables.edit-record', compact('trackable', 'record', 'schema', 'recordValues', 'recordDateValue'));
     }
@@ -1092,9 +1092,11 @@ class TrackableController extends Controller
     private function updateSingleRecord(TrackableRecord $record, array $validated, mixed $recordDate = null): void
     {
         DB::transaction(function () use ($record, $validated, $recordDate) {
-            $record->update([
-                'record_date' => $this->resolveRecordDate($recordDate),
-            ]);
+            if (filled($recordDate)) {
+                $record->update([
+                    'record_date' => $this->resolveRecordDate($recordDate),
+                ]);
+            }
 
             $existingData = $record->data()->get()->keyBy('trackable_schema_uid');
 

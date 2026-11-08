@@ -110,7 +110,7 @@ class TrackableRecordPageTest extends TestCase
         $this->assertSame(2, TrackableData::count());
     }
 
-    public function test_owned_trackable_record_edit_page_is_accessible(): void
+    public function test_editing_record_preserves_measurement_date_unless_changed(): void
     {
         $user = User::factory()->create();
         $trackable = Trackable::create([
@@ -125,7 +125,7 @@ class TrackableRecordPageTest extends TestCase
         ]);
         $record = TrackableRecord::create([
             'trackable_uid' => $trackable->uid,
-            'record_date' => Carbon::parse('2026-03-01 08:00:00'),
+            'record_date' => Carbon::parse('2026-03-01 08:00:42'),
         ]);
         TrackableData::create([
             'trackable_record_uid' => $record->uid,
@@ -139,6 +139,16 @@ class TrackableRecordPageTest extends TestCase
         $response->assertSee('Edit data in Vitals');
         $response->assertSee('Measurement date and time');
         $response->assertSee('72.4');
+        $response->assertSee('value="2026-03-01T08:00:42"', false);
+
+        foreach (['2026-03-01T08:00:42', ''] as $recordDate) {
+            $this->put(route('trackables.records.update', [$trackable->uid, $record->uid]), [
+                'record_date' => $recordDate,
+                $weight->uid => '74.1',
+            ])->assertRedirect(route('trackables.show', $trackable->uid));
+
+            $this->assertSame('2026-03-01 08:00:42', $record->refresh()->record_date);
+        }
     }
 
     public function test_updating_record_data_replaces_existing_values(): void

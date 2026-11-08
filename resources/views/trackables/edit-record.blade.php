@@ -24,6 +24,7 @@
         'cardTitle' => 'Record data',
         'recordValues' => $recordValues,
         'recordDateValue' => $recordDateValue,
+        'recordDateHint' => 'Keep the saved measurement time or enter a corrected time.',
         'showRecordDateInput' => true,
         'footerText' => 'Measurement time can be corrected here, but future dates are not allowed.',
         'submitLabel' => 'Update record',
