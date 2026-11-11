@@ -61,6 +61,59 @@ class TrackableRecordPageTest extends TestCase
         $response->assertSee('Weight');
     }
 
+    public function test_duplicate_record_opens_a_prefilled_add_form_and_saves_a_new_record(): void
+    {
+        $user = User::factory()->create();
+        $trackable = Trackable::factory()->create(['user_id' => $user->id]);
+        $field = TrackableSchema::create([
+            'trackable_uid' => $trackable->uid,
+            'name' => 'Count',
+            'field_type' => 'int',
+            'validation_rule' => 'required|integer',
+        ]);
+        $record = $trackable->records()->create(['record_date' => '2026-03-01 08:00:42']);
+        $record->data()->create(['trackable_schema_uid' => $field->uid, 'value' => '0']);
+
+        $createUrl = route('trackables.records.create', ['trackable' => $trackable->uid, 'duplicate' => $record->uid]);
+        $storeUrl = route('trackables.records.store', $trackable->uid);
+        $recordsUrl = route('trackables.show', $trackable->uid);
+
+        $this->actingAs($user)->get($recordsUrl)
+            ->assertOk()
+            ->assertSee('href="'.$createUrl.'"', false)
+            ->assertSee('Duplicate');
+
+        $this->get($createUrl)
+            ->assertOk()
+            ->assertViewIs('trackables.create-record')
+            ->assertSee('action="'.$storeUrl.'"', false)
+            ->assertSee('value="2026-03-01T08:00:42"', false)
+            ->assertSeeInOrder(['name="'.$field->uid.'"', 'value="0"'], false);
+        $this->assertDatabaseCount('trackable_records', 1);
+
+        $this->post($storeUrl, ['record_date' => '2026-03-01T08:00:42', $field->uid => '2'])
+            ->assertRedirect($recordsUrl);
+
+        $this->assertDatabaseCount('trackable_records', 2);
+        $copy = $trackable->records()->whereKeyNot($record->uid)->sole();
+        $this->assertSame($record->record_date, $copy->record_date);
+        $this->assertSame('2', $copy->data()->sole()->value);
+        $this->assertSame('0', $record->data()->sole()->value);
+    }
+
+    public function test_duplicate_record_rejects_a_source_from_another_trackable(): void
+    {
+        $user = User::factory()->create();
+        $trackable = Trackable::factory()->create(['user_id' => $user->id]);
+        $otherTrackable = Trackable::factory()->create(['user_id' => $user->id]);
+        $record = $otherTrackable->records()->create(['record_date' => '2026-03-01 08:00:42']);
+
+        $this->actingAs($user)->get(route('trackables.records.create', [
+            'trackable' => $trackable->uid,
+            'duplicate' => $record->uid,
+        ]))->assertNotFound();
+    }
+
     public function test_posting_record_data_creates_record_and_values(): void
     {
         $user = User::factory()->create();

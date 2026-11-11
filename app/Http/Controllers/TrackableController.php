@@ -560,11 +560,23 @@ class TrackableController extends Controller
         ));
     }
 
-    public function createRecord(Trackable $trackable)
+    public function createRecord(Request $request, Trackable $trackable)
     {
+        $sourceUid = $request->query('duplicate');
+        $recordValues = [];
+        $recordDateValue = now()->format('Y-m-d\TH:i');
+
+        if ($sourceUid !== null) {
+            abort_unless(is_string($sourceUid), 404);
+
+            $source = $trackable->records()->with('data')->findOrFail($sourceUid);
+            $recordValues = $this->getRecordValues($source);
+            $recordDateValue = Carbon::parse($source->record_date)->format('Y-m-d\TH:i:s');
+        }
+
         $schema = $trackable->schema()->with('enum.values')->orderBy('created_at')->get();
 
-        return view('trackables.create-record', compact('trackable', 'schema'));
+        return view('trackables.create-record', compact('trackable', 'schema', 'recordValues', 'recordDateValue'));
     }
 
     public function storeRecord(Request $request, Trackable $trackable)

@@ -203,9 +203,12 @@
                                     <div class="fw-semibold">
                                         Record Date: {{ $record->record_date }}
                                     </div>
-                                    <div class="d-flex gap-2 mt-2">
+                                    <div class="d-flex flex-wrap gap-2 mt-2">
                                         <a href="{{ route('trackables.records.edit', [$trackable->uid, $record->uid]) }}" class="btn btn-sm btn-outline-primary">
                                             Edit record
+                                        </a>
+                                        <a href="{{ route('trackables.records.create', ['trackable' => $trackable->uid, 'duplicate' => $record->uid]) }}" class="btn btn-sm btn-outline-secondary">
+                                            Duplicate
                                         </a>
                                         <form method="POST" action="{{ route('trackables.records.destroy', [$trackable->uid, $record->uid]) }}" onsubmit="return confirm('Delete this record? This action cannot be undone.');">
                                             @csrf
