@@ -17,7 +17,7 @@ class TrackableShortcutController extends Controller
     public function download(Trackable $trackable)
     {
         return response()->download(
-            base_path('docs/shortcuts/Trackables - New Record.shortcut'),
+            resource_path('shortcuts/Trackables - New Record.shortcut'),
             (Str::slug($trackable->name) ?: 'trackable').'.shortcut',
             ['Content-Type' => 'application/octet-stream', 'Cache-Control' => 'private, no-store']
         );

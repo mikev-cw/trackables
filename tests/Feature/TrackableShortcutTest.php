@@ -23,7 +23,7 @@ class TrackableShortcutTest extends TestCase
             $response = $this->get(route('trackables.shortcut.download', $trackable));
             $response->assertOk()->assertDownload();
             $this->assertSame(
-                file_get_contents(base_path('docs/shortcuts/Trackables - New Record.shortcut')),
+                file_get_contents(resource_path('shortcuts/Trackables - New Record.shortcut')),
                 file_get_contents($response->baseResponse->getFile()->getPathname())
             );
         }

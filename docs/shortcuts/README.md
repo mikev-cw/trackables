@@ -10,7 +10,9 @@ During import, the shortcut asks for three setup values:
 | API URL | Copy the API URL displayed on the setup page, ending in `/api/trackable`. |
 | Trackable UID | Copy the UID displayed on the setup page. UIDs keep working after alias changes. |
 
-Rename each installed copy for its trackable. These values can also be edited in the first three Text actions. The same signed template supports every trackable; the setup values select the account, server, and trackable. Signing happens at build time, so the web server does not need macOS, Python, or an Apple signing service.
+Rename each installed copy for its trackable. These values can also be edited in the first three Text actions. The same signed template supports every trackable. The setup values select the account, server, and trackable after download.
+
+The signed file ships with the app in `resources/shortcuts`. Trackables serves those bytes as-is on any supported host. Installing Trackables and downloading the file require no macOS tooling, Python, Apple credentials, or calls to Apple from the web server.
 
 Each run:
 
@@ -24,7 +26,7 @@ Cancel a prompt to stop without submitting. The server enforces required fields,
 
 A configured shortcut contains your token. Keep it private. Tokens created on the setup page grant account API access, like existing Sanctum tokens. A local Herd `.test` address must be reachable from your device; otherwise use a reachable hosted address.
 
-## Rebuild on macOS
+## Rebuild on macOS when changing the shortcut
 
 From the project root:
 
@@ -32,10 +34,10 @@ From the project root:
 python3 docs/shortcuts/build_shortcut.py /tmp/trackables-new-record.unsigned.shortcut
 shortcuts sign --mode anyone \
   --input /tmp/trackables-new-record.unsigned.shortcut \
-  --output 'docs/shortcuts/Trackables - New Record.shortcut'
+  --output 'resources/shortcuts/Trackables - New Record.shortcut'
 ```
 
-Commit the signed file with generator changes; the app serves that file unchanged to preserve Apple’s signature. Keep `docs/shortcuts` in deployment artifacts.
+Apple validates the exported template when it is signed. The `anyone` mode allows anyone with Apple Shortcuts to import it. Commit the signed file with generator changes so subsequent installations include it. [Apple’s signing documentation](https://support.apple.com/guide/shortcuts-mac/apd455c82f02/mac)
 
 ```sh
 PYTHONDONTWRITEBYTECODE=1 python3 docs/shortcuts/test_shortcut.py
