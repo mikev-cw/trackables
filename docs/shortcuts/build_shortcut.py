@@ -183,7 +183,7 @@ stop('This trackable has no fields.')
 end_if(check)
 empty('Record')
 
-comment('- Repeat once for every schema field.\n- Optional fields can be skipped.\n- Enum choices include only active values; the submitted value is the selected UID.')
+comment('- Repeat once for every schema field.\n- Optional fields offer Don’t fill or accept an empty answer in the same prompt.\n- Enum choices include only active values; the submitted value is the selected UID.')
 loop = str(uuid.uuid4()).upper()
 action('repeat.count', WFRepeatCount=attachment(count), WFControlFlowMode=0,
        GroupingIdentifier=loop)
@@ -194,18 +194,11 @@ name = store('Field Name', get(field, 'name'))
 field_uid = store('Field UID', get(field, 'uid'))
 field_type = store('Field Type', get(field, 'field_type'))
 required = get(field, 'validation_config.required')
-store('Fill Field', literal('Yes'))
-optional = begin_numeric_if(required, 1, condition=0)
-options = action('list', WFItems=['Fill in', 'Skip'])
-selection = choose(options, name)
-skip = begin_if(selection, 'Skip')
-store('Fill Field', literal('No'))
-end_if(skip)
-end_if(optional)
-fill = begin_if(variable('Fill Field'), 'Yes')
-
 enum_case = begin_if(field_type, 'enum')
 empty('Enum Choices')
+optional_enum = begin_numeric_if(required, 1, condition=0)
+set_key('Enum Choices', 'Don’t fill', '__skip__')
+end_if(optional_enum)
 enum_values = get(get(field, 'enum'), 'values')
 enum_count = action('count', WFInput=attachment(enum_values), WFCountType='Items')
 inner_loop = str(uuid.uuid4()).upper()
@@ -234,17 +227,32 @@ stop(text('No active enum choices are available for ', name,
 end_if(no_options)
 chosen = choose(keys, name)
 store('Answer', get(variable('Enum Choices'), chosen))
+skipped_enum = begin_if(chosen, 'Don’t fill')
+store('Answer', literal(''))
+end_if(skipped_enum)
 otherwise(enum_case)
 
 bool_case = begin_if(field_type, 'bool')
-options = action('list', WFItems=['Yes', 'No'])
+optional_bool = begin_numeric_if(required, 1, condition=0)
+store('Boolean Choices', action('list', WFItems=['Yes', 'No', 'Don’t fill']))
+otherwise(optional_bool)
+store('Boolean Choices', action('list', WFItems=['Yes', 'No']))
+end_if(optional_bool)
+options = variable('Boolean Choices')
 chosen = choose(options, name)
 yes = begin_if(chosen, 'Yes')
 store('Answer', literal('1'))
 otherwise(yes)
 store('Answer', literal('0'))
 end_if(yes)
+skipped_bool = begin_if(chosen, 'Don’t fill')
+store('Answer', literal(''))
+end_if(skipped_bool)
 otherwise(bool_case)
+
+optional_input = begin_numeric_if(required, 1, condition=0)
+store('Answer', action('ask', WFAskActionPrompt=text(name, ' (', field_type, ') — leave empty: Don’t fill. Dates: YYYY-MM-DD; datetimes: YYYY-MM-DDTHH:mm:ss±HH:mm.'), WFInputType='Text', WFAllowsMultilineText=True))
+otherwise(optional_input)
 
 date_case = begin_if(field_type, 'date')
 provided = ask(name, 'Date')
@@ -271,20 +279,27 @@ end_if(float_case)
 end_if(int_case)
 end_if(datetime_case)
 end_if(date_case)
+end_if(optional_input)
 end_if(bool_case)
 end_if(enum_case)
 
+has_answer = begin_if(variable('Answer'), condition=100)
 set_key('Record', field_uid, variable('Answer'))
-end_if(fill)
+end_if(has_answer)
 action('repeat.count', WFControlFlowMode=2, GroupingIdentifier=loop)
 
-comment('Serialize the assembled dictionary as JSON, then send it as the HTTP body. The server assigns the current record date. API errors are shown as returned.')
+comment('Serialize the assembled dictionary as JSON, then send it as the HTTP body. The server assigns the current record date. Show the human-readable message from the API response.')
 payload = action('gettext', WFTextActionText=text(variable('Record')))
 post_url = action('url', WFURLActionURL=text(url, '/record'))
 result = action('downloadurl', WFURL=attachment(post_url), WFHTTPMethod='POST',
                 Advanced=True, ShowHeaders=True, WFHTTPHeaders=headers,
                 WFHTTPBodyType='File', WFRequestVariable=attachment(payload))
-action('showresult', Text=text(result))
+parsed_result = action('detect.dictionary', WFInput=attachment(result))
+message = store('Result Message', get(parsed_result, 'message'))
+missing_message = begin_if(message, condition=101)
+store('Result Message', literal('The server did not return a message. Check your records before trying again.'))
+end_if(missing_message)
+action('showresult', Text=text(variable('Result Message')))
 
 workflow = {
     'WFWorkflowName': 'Trackables - New Record',
@@ -295,7 +310,15 @@ workflow = {
                        'WFWorkflowIconGlyphNumber': 61440},
     'WFWorkflowTypes': [],
     'WFWorkflowInputContentItemClasses': [],
-    'WFWorkflowImportQuestions': [],
+    'WFWorkflowImportQuestions': [
+        {'ActionIndex': index, 'ParameterKey': 'WFTextActionText',
+         'Category': 'Parameter', 'Text': prompt, 'DefaultValue': default}
+        for index, prompt, default in [
+            (2, 'Paste your Trackables API token (without Bearer).', 'PASTE_API_TOKEN_HERE'),
+            (4, 'Paste the API URL from the trackable’s Apple Shortcuts page.', 'https://YOUR_DOMAIN/api/trackable'),
+            (6, 'Paste the trackable UID from the Apple Shortcuts page.', 'YOUR_TRACKABLE_ALIAS'),
+        ]
+    ],
     'WFWorkflowActions': actions,
 }
 

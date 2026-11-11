@@ -2,6 +2,7 @@
     <x-slot name="pretitle">Trackable View</x-slot>
     <x-slot name="title">{{ $trackable->name }}</x-slot>
     <x-slot name="actions">
+        <a href="{{ route('trackables.shortcut', $trackable) }}" class="btn btn-outline-primary">Apple Shortcuts</a>
         <a href="{{ route('trackables.records.create', $trackable->uid) }}" class="btn btn-primary">
             Add record
         </a>

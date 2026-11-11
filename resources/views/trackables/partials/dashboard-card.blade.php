@@ -22,6 +22,7 @@
             <div class="dropdown-menu dropdown-menu-end">
                 <a class="dropdown-item" href="{{ route('trackables.show', $trackable) }}">Open records</a>
                 <a class="dropdown-item" href="{{ route('trackables.statistics', $trackable) }}">Statistics</a>
+                <a class="dropdown-item" href="{{ route('trackables.shortcut', $trackable) }}">Apple Shortcuts</a>
                 <div class="dropdown-divider"></div>
                 <a class="dropdown-item" href="{{ route('trackables.edit', $trackable) }}">Edit trackable</a>
                 <a class="dropdown-item" href="{{ route('trackables.schema.edit', $trackable) }}">Edit schema</a>

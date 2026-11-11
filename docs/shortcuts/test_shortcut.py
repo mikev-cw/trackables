@@ -68,7 +68,7 @@ for a in actions:
 assert not stack
 
 
-def simulate(schema, choices):
+def simulate(schema, choices, response=None):
     outputs, variables, requests, shown = {}, {}, [], []
     answers = iter(choices)
     repeat_stack = []
@@ -120,7 +120,9 @@ def simulate(schema, choices):
                 if name == 'conditional':
                     v = render(p['WFInput'])
                     if p['WFCondition'] == 101:
-                        matches = not v
+                        matches = v is None or v == '' or v == [] or v == {}
+                    elif p['WFCondition'] == 100:
+                        matches = v is not None and v != '' and v != [] and v != {}
                     elif 'WFNumberValue' in p:
                         number = float(p['WFNumberValue'])
                         matches = float(v) < number if p['WFCondition'] == 0 else float(v) > number
@@ -155,7 +157,7 @@ def simulate(schema, choices):
                     out = {'data': {'schema': schema}}
                 else:
                     requests.append(json.loads(render(p['WFRequestVariable'])))
-                    out = {'success': True}
+                    out = response if response is not None else {'success': True, 'message': '1 records created successfully'}
             elif name == 'detect.dictionary':
                 out = render(p['WFInput'])
             elif name == 'dictionary':
@@ -192,6 +194,9 @@ def simulate(schema, choices):
             outputs[p['UUID']] = out
             i += 1
     run(0, len(actions))
+    expected_message = (response or {}).get('message') or 'The server did not return a message. Check your records before trying again.'
+    assert shown == [expected_message if response is not None else '1 records created successfully'], shown
+    assert next(answers, None) is None, 'Unused prompt answers'
     return requests
 
 
@@ -209,7 +214,7 @@ schema = [
 ]
 requests = simulate(schema, ['Pending [pending]', 'Text "quoted"\nNext line', 5, 1.25,
                              'No', '2026-10-16', '2026-10-16T10:00:00+02:00',
-                             '{"key":1}', 'Skip'])
+                             '{"key":1}', ''])
 assert requests == [{'status': 'pending-uid', 'memo': 'Text "quoted"\nNext line',
                      'qty': '5', 'cost': '1.25', 'paid': '0', 'day': '2026-10-16',
                      'time': '2026-10-16T10:00:00+02:00', 'json': '{"key":1}'}], requests
@@ -225,7 +230,7 @@ second_enum = field('second_status', 'enum', enum={'values': [
 ]})
 assert simulate([schema[0], second_enum], ['Third [third]', 'Another [another]']) == [
     {'status': 'third-uid', 'second_status': 'another-uid'}]
-assert simulate([field('optional', 'string', required=False)], ['Fill in', 'value']) == [{'optional': 'value'}]
+assert simulate([field('optional', 'string', required=False)], ['value']) == [{'optional': 'value'}]
 try:
     simulate([field('status', 'enum', enum={'values': []})], [])
 except RuntimeError as error:
@@ -233,3 +238,15 @@ except RuntimeError as error:
 else:
     raise AssertionError('Empty enum must stop submission')
 print('PASS: native parameter shapes, references, control flow, JSON boolean and numeric enum flags, three active choices, multiple enums, refreshed labels, typed fields, JSON escaping, optional fields, empty-enum stop.')
+
+for kind, answer, expected in [('string', '', {}), ('int', 0, {'optional': '0'}), ('float', '0.5', {'optional': '0.5'}), ('date', '2026-11-08', {'optional': '2026-11-08'}), ('datetime', '', {}), ('bool', 'Don’t fill', {}), ('bool', 'No', {'optional': '0'})]:
+    assert simulate([field('optional', kind, required=False)], [answer]) == [expected]
+assert simulate([field('optional', 'enum', required=False, enum={'values': []})], ['Don’t fill']) == [{}]
+assert simulate([field('optional', 'enum', required=False, enum={'values': [{'uid': 'x', 'key': 'x', 'label': 'X', 'is_active': True}]})], ['X [x]']) == [{'optional': 'x'}]
+for response in [{'message': 'Data successfully saved.'}, {'message': 'The quantity must be an integer.', 'errors': {'qty': ['Invalid']}}, {}]:
+    simulate([field('memo', 'string')], ['Hello'], response)
+for question in workflow['WFWorkflowImportQuestions']:
+    target = actions[question['ActionIndex']]
+    assert target['WFWorkflowActionIdentifier'] == 'is.workflow.actions.gettext'
+    assert question['ParameterKey'] in target['WFWorkflowActionParameters']
+print('PASS: single optional prompts, skipped enums/booleans, zero values, readable API messages, import questions.')

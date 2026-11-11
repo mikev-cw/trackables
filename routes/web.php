@@ -5,6 +5,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\TrackableController;
 use App\Http\Controllers\TrackableEnumController;
 use App\Http\Controllers\TrackableGroupController;
+use App\Http\Controllers\TrackableShortcutController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
@@ -35,6 +36,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/trackables/create', [TrackableController::class, 'createTrackablePage'])->name('trackables.create');
     Route::get('/trackables/alias-preview', [TrackableController::class, 'previewTrackableAlias'])->name('trackables.alias-preview');
     Route::post('/trackables', [TrackableController::class, 'storeTrackable'])->name('trackables.store');
+    Route::get('/trackables/{trackable}/shortcuts', [TrackableShortcutController::class, 'show'])
+        ->can('own', 'trackable')->name('trackables.shortcut');
+    Route::get('/trackables/{trackable}/shortcuts/download', [TrackableShortcutController::class, 'download'])
+        ->can('own', 'trackable')->name('trackables.shortcut.download');
+    Route::post('/trackables/{trackable}/shortcuts/token', [TrackableShortcutController::class, 'token'])
+        ->can('own', 'trackable')->name('trackables.shortcut.token');
     Route::get('/trackables/{trackable}/duplicate', [TrackableController::class, 'duplicateTrackablePage'])
         ->can('own', 'trackable')
         ->name('trackables.duplicate');
